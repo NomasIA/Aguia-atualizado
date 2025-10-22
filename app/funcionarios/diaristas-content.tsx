@@ -293,85 +293,152 @@ export default function DiaristasContent() {
 
   const handleImportPonto = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      console.log('Nenhum arquivo selecionado');
+      return;
+    }
+
+    console.log('Arquivo selecionado:', file.name, file.type);
+
+    toast({
+      title: 'Processando...',
+      description: 'Importando ponto, aguarde...',
+    });
 
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
         const text = e.target?.result as string;
+        console.log('Conteúdo do arquivo:', text);
+
         const lines = text.split('\n').filter(line => line.trim());
+        console.log('Total de linhas:', lines.length);
 
         if (lines.length < 2) {
           toast({
             title: 'Erro',
-            description: 'Arquivo vazio ou inválido',
+            description: 'Arquivo vazio ou inválido. Deve ter pelo menos 2 linhas (cabeçalho + dados)',
             variant: 'destructive',
           });
           return;
         }
 
         const inicio = startOfWeek(semanaAtual, { weekStartsOn: 6 });
+        console.log('Semana início:', format(inicio, 'yyyy-MM-dd'));
+
         let importados = 0;
+        let naoEncontrados: string[] = [];
 
         for (let i = 1; i < lines.length; i++) {
           const parts = lines[i].split(/[;,\t]/).map(p => p.trim());
-          if (parts.length < 2) continue;
+          console.log(`Linha ${i}:`, parts);
+
+          if (parts.length < 2) {
+            console.log(`Linha ${i} ignorada: formato inválido`);
+            continue;
+          }
 
           const nomeDiarista = parts[0];
           const diasTrabalhados = parseInt(parts[1]) || 0;
+          console.log(`Procurando: ${nomeDiarista}, Dias: ${diasTrabalhados}`);
 
           const diarista = diaristas.find(d =>
             d.nome.toLowerCase().includes(nomeDiarista.toLowerCase()) ||
             nomeDiarista.toLowerCase().includes(d.nome.toLowerCase())
           );
 
-          if (!diarista || !diarista.ativo) continue;
+          if (!diarista) {
+            console.log(`Diarista não encontrado: ${nomeDiarista}`);
+            naoEncontrados.push(nomeDiarista);
+            continue;
+          }
+
+          if (!diarista.ativo) {
+            console.log(`Diarista inativo: ${diarista.nome}`);
+            continue;
+          }
+
+          console.log(`Diarista encontrado: ${diarista.nome} (ID: ${diarista.id})`);
 
           for (let dia = 0; dia < diasTrabalhados && dia < 7; dia++) {
             const data = format(addDays(inicio, dia), 'yyyy-MM-dd');
 
-            const { data: existing } = await supabase
+            const { data: existing, error: selectError } = await supabase
               .from('diarista_ponto')
               .select('id')
               .eq('diarista_id', diarista.id)
               .eq('data', data)
               .maybeSingle();
 
+            if (selectError) {
+              console.error('Erro ao buscar ponto:', selectError);
+              throw selectError;
+            }
+
             if (existing) {
-              await supabase
+              const { error: updateError } = await supabase
                 .from('diarista_ponto')
                 .update({ presente: true })
                 .eq('id', existing.id);
+
+              if (updateError) {
+                console.error('Erro ao atualizar ponto:', updateError);
+                throw updateError;
+              }
+              console.log(`Atualizado: ${diarista.nome} em ${data}`);
             } else {
-              await supabase
+              const { error: insertError } = await supabase
                 .from('diarista_ponto')
                 .insert([{
                   diarista_id: diarista.id,
                   data,
                   presente: true,
                 }]);
+
+              if (insertError) {
+                console.error('Erro ao inserir ponto:', insertError);
+                throw insertError;
+              }
+              console.log(`Inserido: ${diarista.nome} em ${data}`);
             }
           }
           importados++;
         }
 
+        let mensagem = `Ponto importado para ${importados} diarista(s)`;
+        if (naoEncontrados.length > 0) {
+          mensagem += `\n\nNão encontrados: ${naoEncontrados.join(', ')}`;
+        }
+
         toast({
           title: 'Sucesso',
-          description: `Ponto importado para ${importados} diarista(s)`,
+          description: mensagem,
         });
 
         setImportDialogOpen(false);
         loadPontoSemanal();
-      } catch (error) {
+
+        event.target.value = '';
+      } catch (error: any) {
         console.error('Erro ao importar ponto:', error);
         toast({
           title: 'Erro',
-          description: 'Erro ao processar arquivo',
+          description: error.message || 'Erro ao processar arquivo. Verifique o console.',
           variant: 'destructive',
         });
       }
     };
-    reader.readAsText(file);
+
+    reader.onerror = (error) => {
+      console.error('Erro ao ler arquivo:', error);
+      toast({
+        title: 'Erro',
+        description: 'Erro ao ler o arquivo',
+        variant: 'destructive',
+      });
+    };
+
+    reader.readAsText(file, 'UTF-8');
   };
 
   const resetForm = () => {
