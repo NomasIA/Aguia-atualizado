@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, DollarSign } from 'lucide-react';
+import { Plus, Edit, Trash2, DollarSign, Calendar } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Funcionario {
@@ -30,8 +30,17 @@ interface Funcionario {
   ativo: boolean;
 }
 
+interface Diarista {
+  id: string;
+  nome: string;
+  funcao: string;
+  valor_diaria: number;
+  ativo: boolean;
+}
+
 export default function FuncionariosPage() {
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
+  const [diaristas, setDiaristas] = useState<Diarista[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -58,6 +67,7 @@ export default function FuncionariosPage() {
 
   useEffect(() => {
     loadFuncionarios();
+    loadDiaristas();
   }, []);
 
   const loadFuncionarios = async () => {
@@ -78,6 +88,21 @@ export default function FuncionariosPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadDiaristas = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('diaristas')
+        .select('*')
+        .eq('ativo', true)
+        .order('nome');
+
+      if (error) throw error;
+      setDiaristas(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar diaristas:', error);
     }
   };
 
@@ -455,18 +480,95 @@ export default function FuncionariosPage() {
           </div>
         </Card>
 
-        <Card className="card p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gold/10 rounded-lg">
-              <DollarSign className="w-6 h-6 text-gold" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="card p-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-gold/10 rounded-lg">
+                <DollarSign className="w-6 h-6 text-gold" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gold">
+                  {formatCurrency(funcionarios.filter(f => f.ativo).reduce((sum, f) => sum + calcularCustoTotal(f), 0))}
+                </p>
+                <p className="text-sm text-muted">Custo Total Mensal (Mensalistas Ativos)</p>
+              </div>
             </div>
-            <div>
-              <p className="text-2xl font-bold text-gold">
-                {formatCurrency(funcionarios.filter(f => f.ativo).reduce((sum, f) => sum + calcularCustoTotal(f), 0))}
-              </p>
-              <p className="text-sm text-muted">Custo Total Mensal (Ativos)</p>
+          </Card>
+
+          <Card className="card p-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-info/10 rounded-lg">
+                <DollarSign className="w-6 h-6 text-info" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-info">
+                  {formatCurrency(diaristas.reduce((sum, d) => sum + (d.valor_diaria * 5), 0))}
+                </p>
+                <p className="text-sm text-muted">Custo Semanal Estimado (Diaristas)</p>
+              </div>
             </div>
+          </Card>
+        </div>
+
+        <Card className="card">
+          <div className="p-6 border-b border-border">
+            <h2 className="text-xl font-bold text-gold mb-2">Diaristas - Pagamento toda Sexta-feira</h2>
+            <p className="text-sm text-muted">
+              Diaristas ativos recebem o pagamento semanal sempre na sexta-feira, baseado nos dias trabalhados.
+            </p>
           </div>
+          <div className="overflow-x-auto">
+            <table className="table-dark">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Função</th>
+                  <th>Valor da Diária</th>
+                  <th>Pagamento Semanal (5 dias)</th>
+                  <th>Dia de Pagamento</th>
+                </tr>
+              </thead>
+              <tbody>
+                {diaristas.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center text-muted py-8">
+                      Nenhum diarista ativo cadastrado
+                    </td>
+                  </tr>
+                ) : (
+                  diaristas.map((diarista) => (
+                    <tr key={diarista.id}>
+                      <td className="font-medium">{diarista.nome}</td>
+                      <td>{diarista.funcao}</td>
+                      <td className="text-gold font-semibold">
+                        {formatCurrency(diarista.valor_diaria)}
+                      </td>
+                      <td className="text-success font-semibold">
+                        {formatCurrency(diarista.valor_diaria * 5)}
+                      </td>
+                      <td>
+                        <span className="inline-flex items-center gap-2 text-xs px-3 py-1 bg-info/10 text-info rounded-full border border-info/20">
+                          <Calendar className="w-3 h-3" />
+                          Sexta-feira
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          {diaristas.length > 0 && (
+            <div className="p-4 bg-info/5 border-t border-border">
+              <p className="text-sm text-muted">
+                <strong>Total estimado para próxima sexta-feira:</strong>{' '}
+                <span className="text-gold font-bold">
+                  {formatCurrency(diaristas.reduce((sum, d) => sum + (d.valor_diaria * 5), 0))}
+                </span>
+                {' '}(considerando 5 dias trabalhados por diarista)
+              </p>
+            </div>
+          )}
         </Card>
       </div>
     </DashboardLayout>
