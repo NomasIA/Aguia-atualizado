@@ -157,7 +157,7 @@ export default function HomePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="card hover-lift">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Saldo Banco</CardTitle>
+              <CardTitle className="text-sm font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>Saldo Banco</CardTitle>
               <Building2 className="h-5 w-5 text-info" />
             </CardHeader>
             <CardContent>
@@ -170,7 +170,7 @@ export default function HomePage() {
 
           <Card className="card hover-lift">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Saldo Dinheiro</CardTitle>
+              <CardTitle className="text-sm font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>Saldo Dinheiro</CardTitle>
               <Wallet className="h-5 w-5 text-success" />
             </CardHeader>
             <CardContent>
@@ -183,7 +183,7 @@ export default function HomePage() {
 
           <Card className="card hover-lift">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Saldo Total</CardTitle>
+              <CardTitle className="text-sm font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>Saldo Total</CardTitle>
               <DollarSign className="h-5 w-5 text-gold" />
             </CardHeader>
             <CardContent>
@@ -194,7 +194,7 @@ export default function HomePage() {
 
           <Card className="card hover-lift">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Faturamento</CardTitle>
+              <CardTitle className="text-sm font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>Faturamento</CardTitle>
               <TrendingUp className="h-5 w-5 text-success" />
             </CardHeader>
             <CardContent>
@@ -205,7 +205,7 @@ export default function HomePage() {
 
           <Card className="card hover-lift">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Lucro Operacional</CardTitle>
+              <CardTitle className="text-sm font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>Lucro Operacional</CardTitle>
               {kpis.lucroOperacional >= 0 ? (
                 <TrendingUp className="h-5 w-5 text-success" />
               ) : (
@@ -222,7 +222,7 @@ export default function HomePage() {
 
           <Card className="card hover-lift">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Margem Operacional</CardTitle>
+              <CardTitle className="text-sm font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>Margem Operacional</CardTitle>
               {kpis.margemOperacional >= 0 ? (
                 <TrendingUp className="h-5 w-5 text-success" />
               ) : (
@@ -239,14 +239,12 @@ export default function HomePage() {
 
           <Card className="card hover-lift">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Custo Execução Interna</CardTitle>
-              <Users className="h-5 w-5 text-warning" />
+              <CardTitle className="text-sm font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>Custo Total do Mês</CardTitle>
+              <DollarSign className="h-5 w-5 text-danger" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gold" style={{ fontFamily: 'Orbitron, monospace' }}>{formatCurrency(kpis.custoExecucaoInterna)}</div>
-              <span className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-warning/10 text-warning border border-warning/20">
-                Mensalistas + Diaristas
-              </span>
+              <div className="text-2xl font-bold text-danger" style={{ fontFamily: 'Orbitron, monospace' }}>{formatCurrency(kpis.custoExecucaoInterna)}</div>
+              <p className="text-xs text-muted mt-2">Todas as despesas</p>
             </CardContent>
           </Card>
         </div>

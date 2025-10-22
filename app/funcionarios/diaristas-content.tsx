@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Calendar, DollarSign, CheckCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Calendar, DollarSign, CheckCircle, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format, startOfWeek, endOfWeek, addDays, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -32,6 +32,7 @@ export default function DiaristasContent() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [semanaAtual, setSemanaAtual] = useState(new Date());
   const [pontos, setPontos] = useState<{ [key: string]: PontoSemanal }>({});
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -290,6 +291,89 @@ export default function DiaristasContent() {
     }
   };
 
+  const handleImportPonto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split('\n').filter(line => line.trim());
+
+        if (lines.length < 2) {
+          toast({
+            title: 'Erro',
+            description: 'Arquivo vazio ou inválido',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        const inicio = startOfWeek(semanaAtual, { weekStartsOn: 6 });
+        let importados = 0;
+
+        for (let i = 1; i < lines.length; i++) {
+          const parts = lines[i].split(/[;,\t]/).map(p => p.trim());
+          if (parts.length < 2) continue;
+
+          const nomeDiarista = parts[0];
+          const diasTrabalhados = parseInt(parts[1]) || 0;
+
+          const diarista = diaristas.find(d =>
+            d.nome.toLowerCase().includes(nomeDiarista.toLowerCase()) ||
+            nomeDiarista.toLowerCase().includes(d.nome.toLowerCase())
+          );
+
+          if (!diarista || !diarista.ativo) continue;
+
+          for (let dia = 0; dia < diasTrabalhados && dia < 7; dia++) {
+            const data = format(addDays(inicio, dia), 'yyyy-MM-dd');
+
+            const { data: existing } = await supabase
+              .from('diarista_ponto')
+              .select('id')
+              .eq('diarista_id', diarista.id)
+              .eq('data', data)
+              .maybeSingle();
+
+            if (existing) {
+              await supabase
+                .from('diarista_ponto')
+                .update({ presente: true })
+                .eq('id', existing.id);
+            } else {
+              await supabase
+                .from('diarista_ponto')
+                .insert([{
+                  diarista_id: diarista.id,
+                  data,
+                  presente: true,
+                }]);
+            }
+          }
+          importados++;
+        }
+
+        toast({
+          title: 'Sucesso',
+          description: `Ponto importado para ${importados} diarista(s)`,
+        });
+
+        setImportDialogOpen(false);
+        loadPontoSemanal();
+      } catch (error) {
+        console.error('Erro ao importar ponto:', error);
+        toast({
+          title: 'Erro',
+          description: 'Erro ao processar arquivo',
+          variant: 'destructive',
+        });
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const resetForm = () => {
     setEditingId(null);
     setFormData({
@@ -507,10 +591,64 @@ export default function DiaristasContent() {
                     Próxima Semana →
                   </Button>
                 </div>
-                <Button onClick={processarPagamentoSemanal} className="btn-primary">
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  Processar Pagamento Semanal
-                </Button>
+                <div className="flex gap-2">
+                  <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="btn-secondary">
+                        <Upload className="w-4 h-4 mr-2" />
+                        Importar Ponto
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="bg-surface border-border">
+                      <DialogHeader>
+                        <DialogTitle className="text-[#FFD86F]" style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>
+                          Importar Ponto CSV
+                        </DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="p-4 bg-panel/50 rounded-lg">
+                          <h4 className="font-semibold mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>Formato do Arquivo</h4>
+                          <p className="text-sm text-muted mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+                            O arquivo CSV deve ter o seguinte formato:
+                          </p>
+                          <pre className="text-xs bg-black/30 p-3 rounded">
+Nome;Dias Trabalhados
+João Silva;5
+Maria Santos;4
+Pedro Costa;3
+                          </pre>
+                          <p className="text-xs text-muted mt-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+                            • Separador: ponto e vírgula (;), vírgula (,) ou tab
+                            <br />• Dias: número de 0 a 7
+                            <br />• Os pontos serão marcados sequencialmente a partir de sábado
+                          </p>
+                        </div>
+                        <div>
+                          <label htmlFor="import-file" className="cursor-pointer">
+                            <div className="flex items-center justify-center p-6 border-2 border-dashed border-gold/30 rounded-lg hover:border-gold/50 transition-colors">
+                              <Upload className="h-8 w-8 text-gold mr-3" />
+                              <div>
+                                <p className="font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>Selecionar arquivo CSV</p>
+                                <p className="text-xs text-muted" style={{ fontFamily: 'Inter, sans-serif' }}>Clique para escolher</p>
+                              </div>
+                            </div>
+                            <Input
+                              id="import-file"
+                              type="file"
+                              accept=".csv,.txt"
+                              className="hidden"
+                              onChange={handleImportPonto}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                  <Button onClick={processarPagamentoSemanal} className="btn-primary">
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Processar Pagamento Semanal
+                  </Button>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
