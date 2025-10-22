@@ -309,7 +309,7 @@ export default function DiaristasContent() {
     reader.onload = async (e) => {
       try {
         const text = e.target?.result as string;
-        console.log('Conteúdo do arquivo:', text);
+        console.log('Conteúdo do arquivo (primeiras 500 chars):', text.substring(0, 500));
 
         const lines = text.split('\n').filter(line => line.trim());
         console.log('Total de linhas:', lines.length);
@@ -317,92 +317,197 @@ export default function DiaristasContent() {
         if (lines.length < 2) {
           toast({
             title: 'Erro',
-            description: 'Arquivo vazio ou inválido. Deve ter pelo menos 2 linhas (cabeçalho + dados)',
+            description: 'Arquivo vazio ou inválido',
             variant: 'destructive',
           });
           return;
         }
 
         const inicio = startOfWeek(semanaAtual, { weekStartsOn: 6 });
-        console.log('Semana início:', format(inicio, 'yyyy-MM-dd'));
+        const fim = addDays(inicio, 6);
+        console.log('Período da semana:', format(inicio, 'dd/MM/yyyy'), 'até', format(fim, 'dd/MM/yyyy'));
 
         let importados = 0;
         let naoEncontrados: string[] = [];
+        const colaboradoresProcessados = new Map<string, Set<string>>();
 
-        for (let i = 1; i < lines.length; i++) {
-          const parts = lines[i].split(/[;,\t]/).map(p => p.trim());
-          console.log(`Linha ${i}:`, parts);
+        const isPontomaisFormat = text.includes('Colaborador,') || text.includes('Relatório de Registros de ponto');
+        console.log('Formato detectado:', isPontomaisFormat ? 'PONTOMAIS' : 'SIMPLES');
 
-          if (parts.length < 2) {
-            console.log(`Linha ${i} ignorada: formato inválido`);
-            continue;
-          }
+        if (isPontomaisFormat) {
+          let colaboradorAtual = '';
 
-          const nomeDiarista = parts[0];
-          const diasTrabalhados = parseInt(parts[1]) || 0;
-          console.log(`Procurando: ${nomeDiarista}, Dias: ${diasTrabalhados}`);
-
-          const diarista = diaristas.find(d =>
-            d.nome.toLowerCase().includes(nomeDiarista.toLowerCase()) ||
-            nomeDiarista.toLowerCase().includes(d.nome.toLowerCase())
-          );
-
-          if (!diarista) {
-            console.log(`Diarista não encontrado: ${nomeDiarista}`);
-            naoEncontrados.push(nomeDiarista);
-            continue;
-          }
-
-          if (!diarista.ativo) {
-            console.log(`Diarista inativo: ${diarista.nome}`);
-            continue;
-          }
-
-          console.log(`Diarista encontrado: ${diarista.nome} (ID: ${diarista.id})`);
-
-          for (let dia = 0; dia < diasTrabalhados && dia < 7; dia++) {
-            const data = format(addDays(inicio, dia), 'yyyy-MM-dd');
-
-            const { data: existing, error: selectError } = await supabase
-              .from('diarista_ponto')
-              .select('id')
-              .eq('diarista_id', diarista.id)
-              .eq('data', data)
-              .maybeSingle();
-
-            if (selectError) {
-              console.error('Erro ao buscar ponto:', selectError);
-              throw selectError;
+          for (const line of lines) {
+            if (line.startsWith('Colaborador,')) {
+              colaboradorAtual = line.replace('Colaborador,', '').trim();
+              console.log('📋 Colaborador encontrado:', colaboradorAtual);
+              continue;
             }
 
-            if (existing) {
-              const { error: updateError } = await supabase
-                .from('diarista_ponto')
-                .update({ presente: true })
-                .eq('id', existing.id);
+            if (!colaboradorAtual || line.startsWith('Nome,') || line.startsWith('Resumo,') || line.startsWith('Total,')) {
+              continue;
+            }
 
-              if (updateError) {
-                console.error('Erro ao atualizar ponto:', updateError);
-                throw updateError;
-              }
-              console.log(`Atualizado: ${diarista.nome} em ${data}`);
-            } else {
-              const { error: insertError } = await supabase
-                .from('diarista_ponto')
-                .insert([{
-                  diarista_id: diarista.id,
-                  data,
-                  presente: true,
-                }]);
+            const parts = line.split(',').map(p => p.trim().replace(/"/g, ''));
 
-              if (insertError) {
-                console.error('Erro ao inserir ponto:', insertError);
-                throw insertError;
+            if (parts.length >= 3 && parts[0] === colaboradorAtual) {
+              const dataStr = parts[1];
+
+              const dataMatch = dataStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+              if (!dataMatch) continue;
+
+              const [, dia, mes, ano] = dataMatch;
+              const dataRegistro = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+
+              if (dataRegistro >= inicio && dataRegistro <= fim) {
+                if (!colaboradoresProcessados.has(colaboradorAtual)) {
+                  colaboradoresProcessados.set(colaboradorAtual, new Set());
+                }
+
+                const dataFormatada = format(dataRegistro, 'yyyy-MM-dd');
+                colaboradoresProcessados.get(colaboradorAtual)!.add(dataFormatada);
+                console.log(`  ✓ ${colaboradorAtual}: ${dataFormatada}`);
               }
-              console.log(`Inserido: ${diarista.nome} em ${data}`);
             }
           }
-          importados++;
+
+          for (const [nomeColaborador, datasPresenca] of Array.from(colaboradoresProcessados.entries())) {
+            const diarista = diaristas.find(d => {
+              const nomeLimpo = d.nome.toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+              const colaboradorLimpo = nomeColaborador.toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+              return nomeLimpo.includes(colaboradorLimpo) ||
+                     colaboradorLimpo.includes(nomeLimpo) ||
+                     nomeLimpo.split(' ').some(p => colaboradorLimpo.includes(p) && p.length > 3) ||
+                     colaboradorLimpo.split(' ').some(p => nomeLimpo.includes(p) && p.length > 3);
+            });
+
+            if (!diarista) {
+              console.log(`❌ Diarista não encontrado: ${nomeColaborador}`);
+              naoEncontrados.push(nomeColaborador);
+              continue;
+            }
+
+            if (!diarista.ativo) {
+              console.log(`⚠️ Diarista inativo: ${diarista.nome}`);
+              continue;
+            }
+
+            console.log(`✅ Match: ${nomeColaborador} → ${diarista.nome} (ID: ${diarista.id})`);
+
+            for (const data of Array.from(datasPresenca)) {
+              const { data: existing, error: selectError } = await supabase
+                .from('diarista_ponto')
+                .select('id')
+                .eq('diarista_id', diarista.id)
+                .eq('data', data)
+                .maybeSingle();
+
+              if (selectError) {
+                console.error('Erro ao buscar ponto:', selectError);
+                throw selectError;
+              }
+
+              if (existing) {
+                const { error: updateError } = await supabase
+                  .from('diarista_ponto')
+                  .update({ presente: true })
+                  .eq('id', existing.id);
+
+                if (updateError) throw updateError;
+              } else {
+                const { error: insertError } = await supabase
+                  .from('diarista_ponto')
+                  .insert([{
+                    diarista_id: diarista.id,
+                    data,
+                    presente: true,
+                  }]);
+
+                if (insertError) throw insertError;
+              }
+            }
+            importados++;
+          }
+
+        } else {
+          for (let i = 1; i < lines.length; i++) {
+            const parts = lines[i].split(/[;,\t]/).map(p => p.trim());
+            console.log(`Linha ${i}:`, parts);
+
+            if (parts.length < 2) {
+              console.log(`Linha ${i} ignorada: formato inválido`);
+              continue;
+            }
+
+            const nomeDiarista = parts[0];
+            const diasTrabalhados = parseInt(parts[1]) || 0;
+            console.log(`Procurando: ${nomeDiarista}, Dias: ${diasTrabalhados}`);
+
+            const diarista = diaristas.find(d =>
+              d.nome.toLowerCase().includes(nomeDiarista.toLowerCase()) ||
+              nomeDiarista.toLowerCase().includes(d.nome.toLowerCase())
+            );
+
+            if (!diarista) {
+              console.log(`Diarista não encontrado: ${nomeDiarista}`);
+              naoEncontrados.push(nomeDiarista);
+              continue;
+            }
+
+            if (!diarista.ativo) {
+              console.log(`Diarista inativo: ${diarista.nome}`);
+              continue;
+            }
+
+            console.log(`Diarista encontrado: ${diarista.nome} (ID: ${diarista.id})`);
+
+            for (let dia = 0; dia < diasTrabalhados && dia < 7; dia++) {
+              const data = format(addDays(inicio, dia), 'yyyy-MM-dd');
+
+              const { data: existing, error: selectError } = await supabase
+                .from('diarista_ponto')
+                .select('id')
+                .eq('diarista_id', diarista.id)
+                .eq('data', data)
+                .maybeSingle();
+
+              if (selectError) {
+                console.error('Erro ao buscar ponto:', selectError);
+                throw selectError;
+              }
+
+              if (existing) {
+                const { error: updateError } = await supabase
+                  .from('diarista_ponto')
+                  .update({ presente: true })
+                  .eq('id', existing.id);
+
+                if (updateError) {
+                  console.error('Erro ao atualizar ponto:', updateError);
+                  throw updateError;
+                }
+                console.log(`Atualizado: ${diarista.nome} em ${data}`);
+              } else {
+                const { error: insertError } = await supabase
+                  .from('diarista_ponto')
+                  .insert([{
+                    diarista_id: diarista.id,
+                    data,
+                    presente: true,
+                  }]);
+
+                if (insertError) {
+                  console.error('Erro ao inserir ponto:', insertError);
+                  throw insertError;
+                }
+                console.log(`Inserido: ${diarista.nome} em ${data}`);
+              }
+            }
+            importados++;
+          }
         }
 
         let mensagem = `Ponto importado para ${importados} diarista(s)`;
