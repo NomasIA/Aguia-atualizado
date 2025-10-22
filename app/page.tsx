@@ -48,16 +48,25 @@ export default function HomePage() {
 
   useEffect(() => {
     loadKPIs();
+
+    const handleKPIRefresh = () => {
+      loadKPIs();
+    };
+
+    window.addEventListener('kpi-refresh', handleKPIRefresh);
+
+    return () => {
+      window.removeEventListener('kpi-refresh', handleKPIRefresh);
+    };
   }, []);
 
   const loadKPIs = async () => {
     try {
-      const [bankData, cashData, ledgerData, maquinasData, locacoesData] = await Promise.all([
+      const [bankData, cashData, ledgerData, diaristasData] = await Promise.all([
         supabase.from('bank_accounts').select('saldo_atual').maybeSingle(),
         supabase.from('cash_books').select('saldo_atual').maybeSingle(),
         supabase.from('cash_ledger').select('tipo, forma, valor, categoria'),
-        supabase.from('maquinas').select('id, nome').order('nome'),
-        supabase.from('locacoes').select('maquina_id, data_fim').order('data_fim', { ascending: false }),
+        supabase.from('vw_custos_diaristas_periodo').select('total'),
       ]);
 
       const saldoBanco = bankData.data?.saldo_atual || 0;
@@ -83,7 +92,11 @@ export default function HomePage() {
         .reduce((sum: number, l: any) => sum + parseFloat(l.valor), 0);
 
       const faturamento = entradasBanco + entradasDinheiro;
+
+      const custoDiaristas = (diaristasData.data || []).reduce((sum: number, d: any) => sum + parseFloat(d.total || 0), 0);
       const custoExecucao = saidasBanco + saidasDinheiro;
+      const custoExecucaoTotal = custoExecucao + custoDiaristas;
+
       const lucro = faturamento - custoExecucao;
       const margem = faturamento > 0 ? (lucro / faturamento) * 100 : 0;
 
@@ -98,7 +111,7 @@ export default function HomePage() {
         faturamento,
         lucroOperacional: lucro,
         margemOperacional: margem,
-        custoExecucaoInterna: custoExecucao,
+        custoExecucaoInterna: custoExecucaoTotal,
       });
 
       setChartData([
@@ -134,8 +147,10 @@ export default function HomePage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-gold glow-gold mb-2">Dashboard Financeiro</h1>
-          <p className="text-muted">Visão geral do seu negócio</p>
+          <h1 className="text-3xl text-[#FFD86F] mb-2" style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, letterSpacing: 'normal' }}>
+            Dashboard Financeiro
+          </h1>
+          <p className="text-muted" style={{ fontFamily: 'Inter, sans-serif' }}>Visão geral do seu negócio</p>
         </div>
 
 
@@ -146,7 +161,7 @@ export default function HomePage() {
               <Building2 className="h-5 w-5 text-info" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gold">{formatCurrency(kpis.saldoBanco)}</div>
+              <div className="text-2xl font-bold text-gold" style={{ fontFamily: 'Orbitron, monospace' }}>{formatCurrency(kpis.saldoBanco)}</div>
               <span className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-info/10 text-info border border-info/20">
                 Itaú
               </span>
@@ -159,7 +174,7 @@ export default function HomePage() {
               <Wallet className="h-5 w-5 text-success" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gold">{formatCurrency(kpis.saldoDinheiro)}</div>
+              <div className="text-2xl font-bold text-gold" style={{ fontFamily: 'Orbitron, monospace' }}>{formatCurrency(kpis.saldoDinheiro)}</div>
               <span className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-success/10 text-success border border-success/20">
                 Caixa Físico
               </span>
@@ -172,7 +187,7 @@ export default function HomePage() {
               <DollarSign className="h-5 w-5 text-gold" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gold">{formatCurrency(kpis.saldoTotal)}</div>
+              <div className="text-2xl font-bold text-gold" style={{ fontFamily: 'Orbitron, monospace' }}>{formatCurrency(kpis.saldoTotal)}</div>
               <p className="text-xs text-muted mt-2">Banco + Dinheiro</p>
             </CardContent>
           </Card>
@@ -183,7 +198,7 @@ export default function HomePage() {
               <TrendingUp className="h-5 w-5 text-success" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gold">{formatCurrency(kpis.faturamento)}</div>
+              <div className="text-2xl font-bold text-gold" style={{ fontFamily: 'Orbitron, monospace' }}>{formatCurrency(kpis.faturamento)}</div>
               <p className="text-xs text-muted mt-2">Receitas totais</p>
             </CardContent>
           </Card>
@@ -224,12 +239,14 @@ export default function HomePage() {
 
           <Card className="card hover-lift">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Custo Execução</CardTitle>
-              <Wrench className="h-5 w-5 text-warning" />
+              <CardTitle className="text-sm font-medium">Custo Execução Interna</CardTitle>
+              <Users className="h-5 w-5 text-warning" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gold">{formatCurrency(kpis.custoExecucaoInterna)}</div>
-              <p className="text-xs text-muted mt-2">Despesas totais</p>
+              <div className="text-2xl font-bold text-gold" style={{ fontFamily: 'Orbitron, monospace' }}>{formatCurrency(kpis.custoExecucaoInterna)}</div>
+              <span className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-warning/10 text-warning border border-warning/20">
+                Mensalistas + Diaristas
+              </span>
             </CardContent>
           </Card>
         </div>
