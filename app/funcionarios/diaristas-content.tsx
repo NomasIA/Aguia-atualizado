@@ -415,30 +415,61 @@ export default function DiaristasContent() {
           }
 
           for (const [nomeColaborador, datasPresenca] of Array.from(colaboradoresProcessados.entries())) {
-            const diarista = diaristas.find(d => {
-              const nomeLimpo = d.nome.toLowerCase()
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-              const colaboradorLimpo = nomeColaborador.toLowerCase()
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const normalizar = (texto: string) => texto
+              .toLowerCase()
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .replace(/\s+/g, ' ')
+              .trim();
 
-              return nomeLimpo.includes(colaboradorLimpo) ||
-                     colaboradorLimpo.includes(nomeLimpo) ||
-                     nomeLimpo.split(' ').some(p => colaboradorLimpo.includes(p) && p.length > 3) ||
-                     colaboradorLimpo.split(' ').some(p => nomeLimpo.includes(p) && p.length > 3);
-            });
+            const calcularScore = (nomeDiarista: string, nomeColaborador: string): number => {
+              const d = normalizar(nomeDiarista);
+              const c = normalizar(nomeColaborador);
 
-            if (!diarista) {
-              console.log(`❌ Diarista não encontrado: ${nomeColaborador}`);
+              if (d === c) return 100;
+
+              const palavrasD = d.split(' ');
+              const palavrasC = c.split(' ');
+
+              let matchExatos = 0;
+              for (const palavra of palavrasC) {
+                if (palavra.length > 2 && palavrasD.some(p => p === palavra)) {
+                  matchExatos++;
+                }
+              }
+
+              const scoreMatch = (matchExatos / palavrasC.length) * 100;
+
+              if (matchExatos >= 2) return scoreMatch;
+              if (matchExatos === 1 && palavrasC.length <= 2) return scoreMatch;
+
+              return 0;
+            };
+
+            let melhorDiarista = null;
+            let melhorScore = 0;
+
+            for (const d of diaristas) {
+              const score = calcularScore(d.nome, nomeColaborador);
+              if (score > melhorScore) {
+                melhorScore = score;
+                melhorDiarista = d;
+              }
+            }
+
+            if (!melhorDiarista || melhorScore < 50) {
+              console.log(`❌ Não encontrado: ${nomeColaborador} (melhor match: ${melhorScore}%)`);
               naoEncontrados.push(nomeColaborador);
               continue;
             }
 
-            if (!diarista.ativo) {
-              console.log(`⚠️ Diarista inativo: ${diarista.nome}`);
+            if (!melhorDiarista.ativo) {
+              console.log(`⚠️ Inativo: ${melhorDiarista.nome}`);
               continue;
             }
 
-            console.log(`✅ Match: ${nomeColaborador} → ${diarista.nome} (ID: ${diarista.id})`);
+            console.log(`✅ ${nomeColaborador} → ${melhorDiarista.nome} (${melhorScore}%)`);
+            const diarista = melhorDiarista;
 
             for (const data of Array.from(datasPresenca)) {
               const { data: existing, error: selectError } = await supabase
