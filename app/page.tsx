@@ -9,12 +9,10 @@ import {
   TrendingUp,
   TrendingDown,
   Wallet,
-  AlertCircle,
   Building2,
   Users,
   Wrench
 } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface KPI {
@@ -45,7 +43,6 @@ export default function HomePage() {
     margemOperacional: 0,
     custoExecucaoInterna: 0,
   });
-  const [alerts, setAlerts] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [chartData, setChartData] = useState<any[]>([]);
 
@@ -90,31 +87,6 @@ export default function HomePage() {
       const lucro = faturamento - custoExecucao;
       const margem = faturamento > 0 ? (lucro / faturamento) * 100 : 0;
 
-      const newAlerts: string[] = [];
-      if (margem < 0) newAlerts.push('Margem operacional negativa');
-      if (saldoBanco < 0) newAlerts.push('Saldo bancário negativo');
-      if (saldoDinheiro < 0) newAlerts.push('Saldo de caixa negativo');
-
-      const maquinas = maquinasData.data || [];
-      const locacoes = locacoesData.data || [];
-      const hoje = new Date();
-      const quinzeDiasAtras = new Date(hoje.getTime() - 15 * 24 * 60 * 60 * 1000);
-
-      maquinas.forEach((maquina: any) => {
-        const locacoesMaquina = locacoes.filter((loc: any) => loc.maquina_id === maquina.id);
-
-        if (locacoesMaquina.length === 0) {
-          newAlerts.push(`Máquina ociosa: ${maquina.nome} (nunca locada)`);
-        } else {
-          const ultimaLocacao = locacoesMaquina[0];
-
-          if (ultimaLocacao && new Date(ultimaLocacao.data_fim) < quinzeDiasAtras) {
-            const diasOciosa = Math.floor((hoje.getTime() - new Date(ultimaLocacao.data_fim).getTime()) / (24 * 60 * 60 * 1000));
-            newAlerts.push(`Máquina ociosa: ${maquina.nome} (${diasOciosa} dias sem locação)`);
-          }
-        }
-      });
-
       setKpis({
         saldoBanco,
         saldoDinheiro,
@@ -128,8 +100,6 @@ export default function HomePage() {
         margemOperacional: margem,
         custoExecucaoInterna: custoExecucao,
       });
-
-      setAlerts(newAlerts);
 
       setChartData([
         { name: 'Banco', Entradas: entradasBanco, Saídas: saidasBanco },
@@ -168,16 +138,6 @@ export default function HomePage() {
           <p className="text-muted">Visão geral do seu negócio</p>
         </div>
 
-        {alerts.length > 0 && (
-          <div className="space-y-2">
-            {alerts.map((alert, idx) => (
-              <Alert key={idx} variant="destructive" className="bg-danger/10 border-danger/20">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{alert}</AlertDescription>
-              </Alert>
-            ))}
-          </div>
-        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="card hover-lift">
