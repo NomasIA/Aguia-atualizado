@@ -337,13 +337,37 @@ export default function DiaristasContent() {
         if (isPontomaisFormat) {
           let colaboradorAtual = '';
 
+          const parseCSVLine = (line: string): string[] => {
+            const result: string[] = [];
+            let current = '';
+            let insideQuotes = false;
+
+            for (let i = 0; i < line.length; i++) {
+              const char = line[i];
+
+              if (char === '"') {
+                insideQuotes = !insideQuotes;
+              } else if (char === ',' && !insideQuotes) {
+                result.push(current.trim());
+                current = '';
+              } else {
+                current += char;
+              }
+            }
+
+            if (current) {
+              result.push(current.trim());
+            }
+
+            return result;
+          };
+
           for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
-            console.log(`[${i}] Processando linha:`, line.substring(0, 100));
 
             if (line.startsWith('Colaborador,')) {
               colaboradorAtual = line.replace('Colaborador,', '').trim();
-              console.log('📋 Colaborador encontrado:', colaboradorAtual);
+              console.log('📋 Colaborador:', colaboradorAtual);
               continue;
             }
 
@@ -355,26 +379,21 @@ export default function DiaristasContent() {
               continue;
             }
 
-            const parts = line.split(',');
-            console.log(`  Parts (${parts.length}):`, parts.map(p => p.substring(0, 30)));
+            const parts = parseCSVLine(line);
 
             if (parts.length >= 3) {
-              const nomeParte = parts[0].trim().replace(/"/g, '');
-              const dataParte = parts[1].trim().replace(/"/g, '');
+              const nomeParte = parts[0];
+              const dataParte = parts[1];
 
-              console.log(`  Comparando: "${nomeParte}" === "${colaboradorAtual}"?`, nomeParte === colaboradorAtual);
-
-              if (nomeParte === colaboradorAtual || nomeParte.includes(colaboradorAtual) || colaboradorAtual.includes(nomeParte)) {
+              if (nomeParte === colaboradorAtual) {
                 const dataMatch = dataParte.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
 
                 if (!dataMatch) {
-                  console.log(`  Data não encontrada em: "${dataParte}"`);
                   continue;
                 }
 
                 const [, dia, mes, ano] = dataMatch;
                 const dataRegistro = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
-                console.log(`  Data extraída: ${format(dataRegistro, 'dd/MM/yyyy')}`);
 
                 if (dataRegistro >= inicio && dataRegistro <= fim) {
                   if (!colaboradoresProcessados.has(colaboradorAtual)) {
@@ -383,18 +402,16 @@ export default function DiaristasContent() {
 
                   const dataFormatada = format(dataRegistro, 'yyyy-MM-dd');
                   colaboradoresProcessados.get(colaboradorAtual)!.add(dataFormatada);
-                  console.log(`  ✓ ${colaboradorAtual}: ${dataFormatada} ADICIONADO`);
-                } else {
-                  console.log(`  ⏭️ Data fora do período: ${format(dataRegistro, 'dd/MM/yyyy')}`);
+                  console.log(`  ✓ ${format(dataRegistro, 'dd/MM/yyyy')}`);
                 }
               }
             }
           }
 
-          console.log('\n🎯 RESUMO DOS COLABORADORES PROCESSADOS:');
-          console.log('Total de colaboradores encontrados:', colaboradoresProcessados.size);
+          console.log('\n🎯 RESUMO:');
+          console.log('Total:', colaboradoresProcessados.size, 'colaboradores');
           for (const [nome, datas] of Array.from(colaboradoresProcessados.entries())) {
-            console.log(`  ${nome}: ${datas.size} dias únicos`);
+            console.log(`  ${nome}: ${datas.size} dias`);
           }
 
           for (const [nomeColaborador, datasPresenca] of Array.from(colaboradoresProcessados.entries())) {
