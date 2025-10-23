@@ -5,7 +5,10 @@ import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { DollarSign, Banknote, Bus, Check, AlertCircle, Undo2 } from 'lucide-react';
+import { DollarSign, Banknote, Bus, Check, AlertCircle, Undo2, Plus, Edit, Trash2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { format, startOfMonth, getDay } from 'date-fns';
 import { createLedgerEntry, recalcAll, deleteLedgerEntry } from '@/lib/ledger-sync';
 import { revalidateAfterFolha, revalidateAll } from '@/lib/revalidation-utils';
@@ -52,7 +55,20 @@ export default function MensalistasContent() {
   const [modalData, setModalData] = useState<ModalData | null>(null);
   const [undoDialogOpen, setUndoDialogOpen] = useState(false);
   const [selectedRun, setSelectedRun] = useState<PayrollRun | null>(null);
+  const [cadastroDialogOpen, setCadastroDialogOpen] = useState(false);
+  const [editingMensalista, setEditingMensalista] = useState<Mensalista | null>(null);
   const { toast } = useToast();
+
+  const [formData, setFormData] = useState({
+    nome: '',
+    funcao: '',
+    salario_base: '',
+    ajuda_custo: '0',
+    vale_salario: '0',
+    recebe_vt: false,
+    vt_valor_unitario_dia: '0',
+    vt_dias_uteis_override: '22'
+  });
 
   const [competencia, setCompetencia] = useState(() => {
     const now = new Date();
@@ -318,6 +334,132 @@ export default function MensalistasContent() {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
+  const abrirCadastro = () => {
+    setFormData({
+      nome: '',
+      funcao: '',
+      salario_base: '',
+      ajuda_custo: '0',
+      vale_salario: '0',
+      recebe_vt: false,
+      vt_valor_unitario_dia: '0',
+      vt_dias_uteis_override: '22'
+    });
+    setEditingMensalista(null);
+    setCadastroDialogOpen(true);
+  };
+
+  const abrirEdicao = (mensalista: Mensalista) => {
+    setFormData({
+      nome: mensalista.nome,
+      funcao: mensalista.funcao,
+      salario_base: mensalista.salario_base.toString(),
+      ajuda_custo: mensalista.ajuda_custo.toString(),
+      vale_salario: mensalista.vale_salario.toString(),
+      recebe_vt: mensalista.recebe_vt,
+      vt_valor_unitario_dia: mensalista.vt_valor_unitario_dia.toString(),
+      vt_dias_uteis_override: mensalista.vt_dias_uteis_override.toString()
+    });
+    setEditingMensalista(mensalista);
+    setCadastroDialogOpen(true);
+  };
+
+  const salvarMensalista = async () => {
+    if (!formData.nome || !formData.funcao || !formData.salario_base) {
+      toast({
+        title: 'Erro',
+        description: 'Preencha todos os campos obrigatórios (Nome, Função e Salário)',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setProcessing(true);
+
+    try {
+      const dados = {
+        nome: formData.nome,
+        funcao: formData.funcao,
+        salario_base: parseFloat(formData.salario_base),
+        ajuda_custo: parseFloat(formData.ajuda_custo || '0'),
+        vale_salario: parseFloat(formData.vale_salario || '0'),
+        recebe_vt: formData.recebe_vt,
+        vt_valor_unitario_dia: parseFloat(formData.vt_valor_unitario_dia || '0'),
+        vt_dias_uteis_override: parseInt(formData.vt_dias_uteis_override || '22'),
+        tipo_vinculo: 'CLT',
+        ativo: true,
+        aplica_encargos: false,
+        usa_adiantamento: formData.vale_salario !== '0'
+      };
+
+      if (editingMensalista) {
+        const { error } = await supabase
+          .from('funcionarios_mensalistas')
+          .update(dados)
+          .eq('id', editingMensalista.id);
+
+        if (error) throw error;
+
+        toast({
+          title: 'Sucesso',
+          description: 'Mensalista atualizado com sucesso'
+        });
+      } else {
+        const { error } = await supabase
+          .from('funcionarios_mensalistas')
+          .insert([dados]);
+
+        if (error) throw error;
+
+        toast({
+          title: 'Sucesso',
+          description: 'Mensalista cadastrado com sucesso'
+        });
+      }
+
+      setCadastroDialogOpen(false);
+      loadData();
+    } catch (error: any) {
+      console.error('Erro ao salvar mensalista:', error);
+      toast({
+        title: 'Erro',
+        description: error.message || 'Não foi possível salvar o mensalista',
+        variant: 'destructive'
+      });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const excluirMensalista = async (mensalista: Mensalista) => {
+    if (!confirm(`Deseja realmente excluir ${mensalista.nome}?`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('funcionarios_mensalistas')
+        .update({ deleted_at: new Date().toISOString(), ativo: false })
+        .eq('id', mensalista.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sucesso',
+        description: 'Mensalista excluído com sucesso'
+      });
+
+      loadData();
+    } catch (error: any) {
+      console.error('Erro ao excluir mensalista:', error);
+      toast({
+        title: 'Erro',
+        description: error.message || 'Não foi possível excluir o mensalista',
+        variant: 'destructive'
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -332,6 +474,13 @@ export default function MensalistasContent() {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-gold">Folha de Pagamento - Mensalistas</h2>
           <div className="flex items-center gap-4">
+            <Button
+              onClick={abrirCadastro}
+              className="btn-primary"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Novo Funcionário
+            </Button>
             <label className="text-sm text-muted">Competência:</label>
             <input
               type="month"
@@ -444,12 +593,13 @@ export default function MensalistasContent() {
                 <th className="text-right">Vale</th>
                 <th className="text-right">VT Mensal</th>
                 <th className="text-right">Total</th>
+                <th className="text-center">Ações</th>
               </tr>
             </thead>
             <tbody>
               {mensalistas.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center text-muted py-8">
+                  <td colSpan={8} className="text-center text-muted py-8">
                     Nenhum funcionário cadastrado
                   </td>
                 </tr>
@@ -467,6 +617,26 @@ export default function MensalistasContent() {
                       <td className="text-right">{formatCurrency(parseFloat(mensalista.vale_salario?.toString() || '0'))}</td>
                       <td className="text-right">{formatCurrency(vtMensal)}</td>
                       <td className="text-right font-semibold text-gold">{formatCurrency(custoTotal)}</td>
+                      <td>
+                        <div className="flex items-center justify-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => abrirEdicao(mensalista)}
+                            className="h-8"
+                          >
+                            <Edit className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => excluirMensalista(mensalista)}
+                            className="h-8 text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
@@ -490,6 +660,7 @@ export default function MensalistasContent() {
                 <td className="text-right font-bold text-gold text-lg">
                   {formatCurrency(mensalistas.reduce((sum, m) => sum + calcularCustoTotal(m), 0))}
                 </td>
+                <td></td>
               </tr>
             </tfoot>
           </table>
@@ -625,6 +796,189 @@ export default function MensalistasContent() {
               className="bg-destructive hover:bg-destructive/80"
             >
               {processing ? 'Desfazendo...' : 'Confirmar Desfazer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={cadastroDialogOpen} onOpenChange={setCadastroDialogOpen}>
+        <DialogContent className="bg-background border-border max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-gold">
+              {editingMensalista ? 'Editar Funcionário' : 'Novo Funcionário'}
+            </DialogTitle>
+            <DialogDescription>
+              Preencha as informações do funcionário mensalista
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="nome" className="text-gold">Nome *</Label>
+                <Input
+                  id="nome"
+                  value={formData.nome}
+                  onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                  placeholder="Nome completo"
+                  className="input-dark"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="funcao" className="text-gold">Cargo/Função *</Label>
+                <Input
+                  id="funcao"
+                  value={formData.funcao}
+                  onChange={(e) => setFormData({ ...formData, funcao: e.target.value })}
+                  placeholder="Ex: Engenheiro, Operacional"
+                  className="input-dark"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="salario_base" className="text-gold">Salário Base *</Label>
+                <Input
+                  id="salario_base"
+                  type="number"
+                  step="0.01"
+                  value={formData.salario_base}
+                  onChange={(e) => setFormData({ ...formData, salario_base: e.target.value })}
+                  placeholder="0.00"
+                  className="input-dark"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="ajuda_custo" className="text-gold">Ajuda de Custo</Label>
+                <Input
+                  id="ajuda_custo"
+                  type="number"
+                  step="0.01"
+                  value={formData.ajuda_custo}
+                  onChange={(e) => setFormData({ ...formData, ajuda_custo: e.target.value })}
+                  placeholder="0.00"
+                  className="input-dark"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="vale_salario" className="text-gold">Vale-Salário</Label>
+                <Input
+                  id="vale_salario"
+                  type="number"
+                  step="0.01"
+                  value={formData.vale_salario}
+                  onChange={(e) => setFormData({ ...formData, vale_salario: e.target.value })}
+                  placeholder="0.00"
+                  className="input-dark"
+                />
+                <p className="text-xs text-muted">Adiantamento quinzenal (dia 20)</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="vt_dias_uteis" className="text-gold">Dias Úteis/Mês</Label>
+                <Input
+                  id="vt_dias_uteis"
+                  type="number"
+                  value={formData.vt_dias_uteis_override}
+                  onChange={(e) => setFormData({ ...formData, vt_dias_uteis_override: e.target.value })}
+                  placeholder="22"
+                  className="input-dark"
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-border pt-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="space-y-1">
+                  <Label className="text-gold">Recebe Vale-Transporte</Label>
+                  <p className="text-xs text-muted">Funcionário utiliza transporte público</p>
+                </div>
+                <Switch
+                  checked={formData.recebe_vt}
+                  onCheckedChange={(checked) => setFormData({ ...formData, recebe_vt: checked })}
+                />
+              </div>
+
+              {formData.recebe_vt && (
+                <div className="space-y-2 pl-4 border-l-2 border-gold/20">
+                  <Label htmlFor="vt_valor_unitario" className="text-gold">Valor Unitário do VT</Label>
+                  <Input
+                    id="vt_valor_unitario"
+                    type="number"
+                    step="0.01"
+                    value={formData.vt_valor_unitario_dia}
+                    onChange={(e) => setFormData({ ...formData, vt_valor_unitario_dia: e.target.value })}
+                    placeholder="0.00"
+                    className="input-dark"
+                  />
+                  <p className="text-xs text-muted">
+                    VT Mensal calculado: {formatCurrency(
+                      parseFloat(formData.vt_valor_unitario_dia || '0') *
+                      parseInt(formData.vt_dias_uteis_override || '22')
+                    )}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-gold/10 border border-gold/20 rounded-lg p-3">
+              <p className="text-sm font-semibold text-gold mb-2">Resumo do Custo Mensal</p>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted">Salário Base:</span>
+                  <span className="text-white">{formatCurrency(parseFloat(formData.salario_base || '0'))}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted">Ajuda de Custo:</span>
+                  <span className="text-white">{formatCurrency(parseFloat(formData.ajuda_custo || '0'))}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted">Vale-Salário:</span>
+                  <span className="text-white">{formatCurrency(parseFloat(formData.vale_salario || '0'))}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted">VT Mensal:</span>
+                  <span className="text-white">
+                    {formatCurrency(
+                      formData.recebe_vt
+                        ? parseFloat(formData.vt_valor_unitario_dia || '0') * parseInt(formData.vt_dias_uteis_override || '22')
+                        : 0
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-gold/20 pt-1 mt-1">
+                  <span className="font-semibold text-gold">Total:</span>
+                  <span className="font-bold text-gold">
+                    {formatCurrency(
+                      parseFloat(formData.salario_base || '0') +
+                      parseFloat(formData.ajuda_custo || '0') +
+                      parseFloat(formData.vale_salario || '0') +
+                      (formData.recebe_vt
+                        ? parseFloat(formData.vt_valor_unitario_dia || '0') * parseInt(formData.vt_dias_uteis_override || '22')
+                        : 0)
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCadastroDialogOpen(false)}
+              disabled={processing}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={salvarMensalista}
+              disabled={processing}
+              className="btn-primary"
+            >
+              {processing ? 'Salvando...' : editingMensalista ? 'Atualizar' : 'Cadastrar'}
             </Button>
           </DialogFooter>
         </DialogContent>
