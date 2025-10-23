@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Wrench, Plus, Calendar, DollarSign, CheckCircle, Lock, Edit2, Package } from 'lucide-react';
+import { Wrench, Plus, Calendar, DollarSign, CheckCircle, Lock, Edit2, Package, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format, differenceInDays, parse } from 'date-fns';
 
@@ -86,7 +86,7 @@ export default function MaquinariosPage() {
       setLoading(true);
 
       const [maquinasRes, contratosRes] = await Promise.all([
-        supabase.from('maquinas').select('*').order('item'),
+        supabase.from('maquinas').select('*').is('deleted_at', null).order('item'),
         supabase.from('contratos_locacao').select('*').is('deleted_at', null).order('created_at', { ascending: false })
       ]);
 
@@ -290,6 +290,25 @@ export default function MaquinariosPage() {
     }
   };
 
+  const excluirMaquina = async (maquinaId: string, maquinaNome: string) => {
+    if (!confirm(`Tem certeza que deseja excluir "${maquinaNome}"? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase.rpc('excluir_maquina', {
+        p_maquina_id: maquinaId
+      });
+
+      if (error) throw error;
+
+      toast({ title: 'Sucesso', description: 'Maquinário excluído com sucesso' });
+      loadData();
+    } catch (error: any) {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+    }
+  };
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
@@ -353,8 +372,18 @@ export default function MaquinariosPage() {
                             variant="ghost"
                             onClick={() => openEdit(maquina)}
                             className="h-8 w-8 p-0 hover:bg-gold/10"
+                            title="Editar"
                           >
                             <Edit2 className="w-4 h-4 text-gold" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => excluirMaquina(maquina.id, maquina.item)}
+                            className="h-8 w-8 p-0 hover:bg-red-500/10"
+                            title="Excluir"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
                           </Button>
                           <Wrench className="w-5 h-5 text-gold" />
                         </div>
@@ -658,6 +687,19 @@ export default function MaquinariosPage() {
             </div>
 
             <div className="flex gap-3 pt-4">
+              <Button
+                type="button"
+                onClick={() => {
+                  setEditOpen(false);
+                  if (selectedMaquina) {
+                    excluirMaquina(selectedMaquina.id, selectedMaquina.item);
+                  }
+                }}
+                className="bg-red-500/20 text-red-500 border border-red-500/30 hover:bg-red-500/30"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Excluir
+              </Button>
               <Button type="submit" className="btn-primary flex-1">
                 <CheckCircle className="w-4 h-4 mr-2" />
                 Salvar Alterações
