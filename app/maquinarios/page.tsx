@@ -13,6 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Wrench, Plus, Trash2, FileText, CheckCircle, DollarSign } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { revalidateAfterContratos, revalidateAfterFinancialOperation, revalidateAll } from '@/lib/revalidation-utils';
 
 interface Maquina {
   id: string;
@@ -138,6 +139,7 @@ export default function MaquinariosPage() {
       setDialogOpen(false);
       resetForm();
       loadData();
+      revalidateAll();
     } catch (error: any) {
       console.error('Erro ao cadastrar máquina:', error);
       toast({ title: 'Erro', description: error.message || 'Não foi possível cadastrar a máquina', variant: 'destructive' });
@@ -185,6 +187,7 @@ export default function MaquinariosPage() {
       setContratoDialogOpen(false);
       resetContratoForm();
       loadData();
+      revalidateAfterContratos();
     } catch (error: any) {
       console.error('Erro ao confirmar contrato:', error);
       toast({ title: 'Erro', description: error.message || 'Não foi possível confirmar o contrato', variant: 'destructive' });
@@ -247,7 +250,8 @@ export default function MaquinariosPage() {
 
       toast({ title: 'Sucesso', description: 'Pagamento registrado e saldo atualizado!' });
       loadData();
-      window.dispatchEvent(new Event('revalidate-all'));
+      revalidateAfterFinancialOperation();
+      revalidateAfterContratos();
     } catch (error: any) {
       console.error('Erro ao marcar como recebido:', error);
       toast({ title: 'Erro', description: error.message || 'Não foi possível registrar o pagamento', variant: 'destructive' });
@@ -270,6 +274,7 @@ export default function MaquinariosPage() {
       setDeleteDialogOpen(false);
       setItemToDelete(null);
       loadData();
+      revalidateAll();
     } catch (error: any) {
       console.error('Erro ao excluir:', error);
       toast({ title: 'Erro', description: 'Não foi possível excluir', variant: 'destructive' });
