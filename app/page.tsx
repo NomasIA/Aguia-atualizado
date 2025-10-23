@@ -65,7 +65,7 @@ export default function HomePage() {
       const [bankData, cashData, ledgerData, diaristasData] = await Promise.all([
         supabase.from('bank_accounts').select('saldo_atual').maybeSingle(),
         supabase.from('cash_books').select('saldo_atual').maybeSingle(),
-        supabase.from('cash_ledger').select('tipo, forma, valor, categoria'),
+        supabase.from('cash_ledger').select('tipo, forma, valor, categoria').is('deleted_at', null),
         supabase.from('vw_custos_diaristas_periodo').select('total'),
       ]);
 

@@ -6,12 +6,16 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BarChart3, Download, FileText, Calendar, Building2, Users, Wrench, DollarSign } from 'lucide-react';
+import { BarChart3, Download, FileText, Calendar, Building2, Users, Wrench, DollarSign, FileSpreadsheet } from 'lucide-react';
+import { generateExcelReport, generateMultiSheetExcelReport } from '@/lib/excel-utils';
+import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 export default function RelatoriosPage() {
   const [selectedModule, setSelectedModule] = useState<string>('financeiro');
   const [selectedPeriod, setSelectedPeriod] = useState<string>('mes-atual');
   const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
 
   const modules = [
     { value: 'financeiro', label: 'Financeiro Geral', icon: DollarSign },
@@ -53,6 +57,178 @@ export default function RelatoriosPage() {
     }
 
     return { startDate, endDate };
+  };
+
+  const handleExportMensalistas = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('funcionarios_mensalistas')
+        .select('*')
+        .order('nome');
+
+      if (error) throw error;
+
+      const reportData = (data || []).map((func: any) => ({
+        nome: func.nome || '',
+        funcao: func.funcao || '',
+        salario_base: func.salario_base || 0,
+        ajuda_custo: func.ajuda_custo || 0,
+        encargos: func.encargos || 0,
+        vt: func.vt || 0,
+        custo_total: (func.salario_base || 0) + (func.ajuda_custo || 0) + (func.encargos || 0) + (func.vt || 0),
+        obra: func.obra || '',
+        ativo: func.ativo ? 'Sim' : 'Não',
+      }));
+
+      const totalSalarios = reportData.reduce((sum, r) => sum + r.salario_base, 0);
+      const totalAjudas = reportData.reduce((sum, r) => sum + r.ajuda_custo, 0);
+      const totalEncargos = reportData.reduce((sum, r) => sum + r.encargos, 0);
+      const totalVT = reportData.reduce((sum, r) => sum + r.vt, 0);
+      const totalGeral = reportData.reduce((sum, r) => sum + r.custo_total, 0);
+
+      generateExcelReport({
+        title: 'Relatório de Mensalistas',
+        period: format(new Date(), 'MMMM/yyyy'),
+        columns: [
+          { header: 'Nome', key: 'nome', width: 25 },
+          { header: 'Função', key: 'funcao', width: 20 },
+          { header: 'Salário Base', key: 'salario_base', width: 15, format: 'currency' },
+          { header: 'Ajuda de Custo', key: 'ajuda_custo', width: 15, format: 'currency' },
+          { header: 'Encargos (R$)', key: 'encargos', width: 15, format: 'currency' },
+          { header: 'VT (R$)', key: 'vt', width: 12, format: 'currency' },
+          { header: 'Custo Total (R$)', key: 'custo_total', width: 15, format: 'currency' },
+          { header: 'Obra', key: 'obra', width: 20 },
+          { header: 'Ativo', key: 'ativo', width: 10 },
+        ],
+        data: reportData,
+        filename: 'relatorio-mensalistas',
+        totals: {
+          nome: 'TOTAL',
+          salario_base: totalSalarios,
+          ajuda_custo: totalAjudas,
+          encargos: totalEncargos,
+          vt: totalVT,
+          custo_total: totalGeral,
+        },
+      });
+
+      toast({ title: 'Sucesso', description: 'Relatório de Mensalistas exportado!' });
+    } catch (error) {
+      console.error('Erro ao exportar mensalistas:', error);
+      toast({ title: 'Erro', description: 'Falha ao exportar relatório', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportDiaristas = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('diaristas')
+        .select('*')
+        .order('nome');
+
+      if (error) throw error;
+
+      const reportData = (data || []).map((diarista: any) => ({
+        nome: diarista.nome || '',
+        funcao: diarista.funcao || '',
+        valor_diaria: diarista.valor_diaria || 0,
+        dias_semana: diarista.dias_semana || 0,
+        total_semana: (diarista.valor_diaria || 0) * (diarista.dias_semana || 0),
+        lote: diarista.lote || '',
+        obra: diarista.obra || '',
+      }));
+
+      const totalSemanal = reportData.reduce((sum, r) => sum + r.total_semana, 0);
+
+      generateExcelReport({
+        title: 'Relatório de Diaristas',
+        period: format(new Date(), 'MMMM/yyyy'),
+        columns: [
+          { header: 'Nome', key: 'nome', width: 25 },
+          { header: 'Função', key: 'funcao', width: 20 },
+          { header: 'Valor Diária', key: 'valor_diaria', width: 15, format: 'currency' },
+          { header: 'Dias na Semana', key: 'dias_semana', width: 15, format: 'number' },
+          { header: 'Total Semana (R$)', key: 'total_semana', width: 18, format: 'currency' },
+          { header: 'Lote', key: 'lote', width: 15 },
+          { header: 'Obra', key: 'obra', width: 20 },
+        ],
+        data: reportData,
+        filename: 'relatorio-diaristas',
+        totals: {
+          nome: 'TOTAL',
+          total_semana: totalSemanal,
+        },
+      });
+
+      toast({ title: 'Sucesso', description: 'Relatório de Diaristas exportado!' });
+    } catch (error) {
+      console.error('Erro ao exportar diaristas:', error);
+      toast({ title: 'Erro', description: 'Falha ao exportar relatório', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportEntradasSaidas = async () => {
+    setLoading(true);
+    try {
+      const { startDate, endDate } = getDateRange(selectedPeriod);
+
+      const { data, error } = await supabase
+        .from('cash_ledger')
+        .select('*')
+        .is('deleted_at', null)
+        .gte('data', startDate.toISOString())
+        .lte('data', endDate.toISOString())
+        .order('data', { ascending: false });
+
+      if (error) throw error;
+
+      const reportData = (data || []).map((trans: any) => ({
+        data: trans.data,
+        tipo: trans.tipo === 'entrada' ? 'Entrada' : 'Saída',
+        forma: trans.forma === 'banco' ? 'Banco (Itaú)' : 'Dinheiro (Físico)',
+        categoria: trans.categoria || '',
+        obra: trans.obra || '',
+        valor: trans.valor || 0,
+        observacao: trans.observacao || '',
+      }));
+
+      const totalEntradas = reportData.filter(r => r.tipo === 'Entrada').reduce((sum, r) => sum + r.valor, 0);
+      const totalSaidas = reportData.filter(r => r.tipo === 'Saída').reduce((sum, r) => sum + r.valor, 0);
+      const saldo = totalEntradas - totalSaidas;
+
+      generateExcelReport({
+        title: 'Relatório de Entradas & Saídas',
+        period: `${format(startDate, 'dd/MM/yyyy')} a ${format(endDate, 'dd/MM/yyyy')}`,
+        columns: [
+          { header: 'Data', key: 'data', width: 12, format: 'date' },
+          { header: 'Tipo', key: 'tipo', width: 12 },
+          { header: 'Forma', key: 'forma', width: 20 },
+          { header: 'Categoria', key: 'categoria', width: 20 },
+          { header: 'Obra', key: 'obra', width: 20 },
+          { header: 'Valor (R$)', key: 'valor', width: 15, format: 'currency' },
+          { header: 'Observação', key: 'observacao', width: 30 },
+        ],
+        data: reportData,
+        filename: 'relatorio-entradas-saidas',
+        totals: {
+          data: 'TOTAL',
+          valor: saldo,
+        },
+      });
+
+      toast({ title: 'Sucesso', description: 'Relatório de Entradas & Saídas exportado!' });
+    } catch (error) {
+      console.error('Erro ao exportar entradas/saídas:', error);
+      toast({ title: 'Erro', description: 'Falha ao exportar relatório', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleExportCSV = async () => {
@@ -245,6 +421,57 @@ export default function RelatoriosPage() {
             </CardContent>
           </Card>
         </div>
+
+        <Card className="card">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <FileSpreadsheet className="h-5 w-5 mr-2 text-gold" />
+              Relatórios Especiais (Excel Formatado)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Button
+                onClick={handleExportMensalistas}
+                disabled={loading}
+                className="btn-primary h-auto py-4 flex-col"
+              >
+                <Users className="h-6 w-6 mb-2" />
+                <span className="font-semibold">Relatório Mensalistas</span>
+                <span className="text-xs opacity-75 mt-1">
+                  Salários, encargos, VT
+                </span>
+              </Button>
+
+              <Button
+                onClick={handleExportDiaristas}
+                disabled={loading}
+                className="btn-primary h-auto py-4 flex-col"
+              >
+                <Users className="h-6 w-6 mb-2" />
+                <span className="font-semibold">Relatório Diaristas</span>
+                <span className="text-xs opacity-75 mt-1">
+                  Diárias, lotes, obras
+                </span>
+              </Button>
+
+              <Button
+                onClick={handleExportEntradasSaidas}
+                disabled={loading}
+                className="btn-primary h-auto py-4 flex-col"
+              >
+                <DollarSign className="h-6 w-6 mb-2" />
+                <span className="font-semibold">Relatório Entradas & Saídas</span>
+                <span className="text-xs opacity-75 mt-1">
+                  Período: {periods.find(p => p.value === selectedPeriod)?.label}
+                </span>
+              </Button>
+            </div>
+            <p className="text-xs text-muted mt-4 text-center">
+              Relatórios Excel com formatação profissional, totais e subtotais automáticos
+            </p>
+          </CardContent>
+        </Card>
 
         <Card className="card">
           <CardHeader>

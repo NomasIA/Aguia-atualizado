@@ -6,8 +6,9 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Download, Filter, TrendingUp, TrendingDown } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Plus, Download, Filter, TrendingUp, TrendingDown, Trash2, Edit, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
@@ -20,6 +21,7 @@ interface Transaction {
   descricao: string;
   valor: number;
   observacao: string;
+  deleted_at: string | null;
 }
 
 export default function EntradasSaidasPage() {
@@ -27,6 +29,9 @@ export default function EntradasSaidasPage() {
   const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
+  const [showDeleted, setShowDeleted] = useState(false);
   const { toast } = useToast();
 
   const [filters, setFilters] = useState({
@@ -49,7 +54,7 @@ export default function EntradasSaidasPage() {
 
   useEffect(() => {
     loadTransactions();
-  }, []);
+  }, [showDeleted]);
 
   useEffect(() => {
     applyFilters();
@@ -57,10 +62,16 @@ export default function EntradasSaidasPage() {
 
   const loadTransactions = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('cash_ledger')
         .select('*')
         .order('data', { ascending: false });
+
+      if (!showDeleted) {
+        query = query.is('deleted_at', null);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setTransactions(data || []);
@@ -123,6 +134,9 @@ export default function EntradasSaidasPage() {
       setDialogOpen(false);
       resetForm();
       loadTransactions();
+
+      // Trigger KPI refresh
+      window.dispatchEvent(new Event('kpi-refresh'));
     } catch (error) {
       console.error('Erro ao salvar transação:', error);
       toast({ title: 'Erro', description: 'Não foi possível registrar a transação', variant: 'destructive' });
@@ -159,6 +173,39 @@ export default function EntradasSaidasPage() {
     a.href = url;
     a.download = `transacoes-${format(new Date(), 'yyyy-MM-dd')}.csv`;
     a.click();
+  };
+
+  const handleDelete = async () => {
+    if (!transactionToDelete) return;
+
+    try {
+      // Soft delete: set deleted_at timestamp
+      const { error } = await supabase
+        .from('cash_ledger')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', transactionToDelete.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sucesso',
+        description: 'Transação excluída. Saldos recalculados.'
+      });
+
+      setDeleteDialogOpen(false);
+      setTransactionToDelete(null);
+      loadTransactions();
+
+      // Trigger KPI refresh to recalculate balances
+      window.dispatchEvent(new Event('kpi-refresh'));
+    } catch (error) {
+      console.error('Erro ao excluir transação:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível excluir a transação',
+        variant: 'destructive'
+      });
+    }
   };
 
   const formatCurrency = (value: number) => {
@@ -214,6 +261,14 @@ export default function EntradasSaidasPage() {
             <p className="text-muted">Histórico completo de transações financeiras</p>
           </div>
           <div className="flex gap-3">
+            <Button
+              onClick={() => setShowDeleted(!showDeleted)}
+              className="btn-secondary"
+              variant="outline"
+            >
+              {showDeleted ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
+              {showDeleted ? 'Ocultar excluídas' : 'Ver excluídas'}
+            </Button>
             <Button onClick={exportToCSV} className="btn-secondary">
               <Download className="w-4 h-4 mr-2" />
               Exportar CSV
@@ -438,18 +493,19 @@ export default function EntradasSaidasPage() {
                   <th>Categoria</th>
                   <th>Descrição</th>
                   <th>Valor</th>
+                  <th>Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center text-muted py-8">
+                    <td colSpan={7} className="text-center text-muted py-8">
                       Nenhuma transação encontrada
                     </td>
                   </tr>
                 ) : (
                   filteredTransactions.map((transaction) => (
-                    <tr key={transaction.id}>
+                    <tr key={transaction.id} className={transaction.deleted_at ? 'opacity-50' : ''}>
                       <td>{format(new Date(transaction.data), 'dd/MM/yyyy')}</td>
                       <td>
                         {transaction.tipo === 'entrada' ? (
@@ -474,6 +530,27 @@ export default function EntradasSaidasPage() {
                       <td className={`font-semibold ${transaction.tipo === 'entrada' ? 'text-success' : 'text-danger'}`}>
                         {transaction.tipo === 'entrada' ? '+' : '-'} {formatCurrency(transaction.valor)}
                       </td>
+                      <td>
+                        {transaction.deleted_at ? (
+                          <span className="text-xs px-2 py-1 bg-red-500/10 text-red-400 rounded-full border border-red-500/20">
+                            🗑️ Excluído
+                          </span>
+                        ) : (
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-danger hover:text-danger hover:bg-danger/10"
+                              onClick={() => {
+                                setTransactionToDelete(transaction);
+                                setDeleteDialogOpen(true);
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -481,6 +558,30 @@ export default function EntradasSaidasPage() {
             </table>
           </div>
         </Card>
+
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent className="bg-surface border-border">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-gold">Excluir Transação</AlertDialogTitle>
+              <AlertDialogDescription className="text-muted">
+                Tem certeza que deseja excluir esta transação? Esta ação irá atualizar os saldos de Banco e Caixa imediatamente.
+                {transactionToDelete && (
+                  <div className="mt-4 p-3 bg-black/30 rounded border border-border">
+                    <p><strong>Data:</strong> {format(new Date(transactionToDelete.data), 'dd/MM/yyyy')}</p>
+                    <p><strong>Descrição:</strong> {transactionToDelete.descricao}</p>
+                    <p><strong>Valor:</strong> {formatCurrency(transactionToDelete.valor)}</p>
+                  </div>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="btn-secondary">Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="btn-danger bg-danger hover:bg-danger/80">
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </DashboardLayout>
   );
