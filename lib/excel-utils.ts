@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export interface ExcelColumn {
   header: string;
@@ -18,7 +19,20 @@ export interface ExcelOptions {
   totals?: { [key: string]: number | string };
 }
 
-export function generateExcelReport(options: ExcelOptions) {
+const formatCurrency = (value: number): string => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
+};
+
+const formatDate = (value: string | Date): string => {
+  if (!value) return '';
+  const date = typeof value === 'string' ? new Date(value) : value;
+  return format(date, 'dd/MM/yyyy', { locale: ptBR });
+};
+
+export function generateFormattedExcel(options: ExcelOptions) {
   const {
     title,
     period,
@@ -29,325 +43,308 @@ export function generateExcelReport(options: ExcelOptions) {
     totals,
   } = options;
 
-  const workbook = XLSX.utils.book_new();
-  const worksheet: any = {};
+  const rows: any[][] = [];
 
-  let currentRow = 0;
-
-  if (title || period) {
-    const titleText = [title, period].filter(Boolean).join(' - ');
-    worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: columns.length - 1 } }];
-    worksheet['A1'] = { v: titleText, t: 's', s: { font: { bold: true, sz: 14 }, alignment: { horizontal: 'center' } } };
-    currentRow = 2;
+  if (title) {
+    rows.push([title]);
+    rows.push([]);
   }
 
-  const headerRow = currentRow;
-  columns.forEach((col, idx) => {
-    const cell = XLSX.utils.encode_cell({ r: headerRow, c: idx });
-    worksheet[cell] = {
-      v: col.header,
-      t: 's',
-      s: {
-        font: { bold: true },
-        fill: { fgColor: { rgb: 'E5E7EB' } },
-        border: {
-          top: { style: 'thin', color: { rgb: '000000' } },
-          bottom: { style: 'thin', color: { rgb: '000000' } },
-          left: { style: 'thin', color: { rgb: '000000' } },
-          right: { style: 'thin', color: { rgb: '000000' } },
-        },
-      },
-    };
-  });
+  if (period) {
+    rows.push([`Período: ${period}`]);
+    rows.push([]);
+  }
 
-  currentRow++;
+  const headers = columns.map((col) => col.header);
+  rows.push(headers);
 
-  data.forEach((row, rowIdx) => {
-    columns.forEach((col, colIdx) => {
-      const cell = XLSX.utils.encode_cell({ r: currentRow + rowIdx, c: colIdx });
-      let value = row[col.key];
-      let cellType = 't';
+  data.forEach((item) => {
+    const row = columns.map((col) => {
+      const value = item[col.key];
 
-      if (col.format === 'currency' && typeof value === 'number') {
-        worksheet[cell] = {
-          v: value,
-          t: 'n',
-          z: 'R$ #,##0.00',
-          s: {
-            border: {
-              top: { style: 'thin', color: { rgb: 'D1D5DB' } },
-              bottom: { style: 'thin', color: { rgb: 'D1D5DB' } },
-              left: { style: 'thin', color: { rgb: 'D1D5DB' } },
-              right: { style: 'thin', color: { rgb: 'D1D5DB' } },
-            },
-          },
-        };
-      } else if (col.format === 'date' && value) {
-        try {
-          const date = new Date(value);
-          worksheet[cell] = {
-            v: format(date, 'dd/MM/yyyy'),
-            t: 's',
-            s: {
-              border: {
-                top: { style: 'thin', color: { rgb: 'D1D5DB' } },
-                bottom: { style: 'thin', color: { rgb: 'D1D5DB' } },
-                left: { style: 'thin', color: { rgb: 'D1D5DB' } },
-                right: { style: 'thin', color: { rgb: 'D1D5DB' } },
-              },
-            },
-          };
-        } catch (e) {
-          worksheet[cell] = { v: value, t: 's' };
-        }
-      } else if (col.format === 'number' && typeof value === 'number') {
-        worksheet[cell] = {
-          v: value,
-          t: 'n',
-          z: '#,##0.00',
-          s: {
-            border: {
-              top: { style: 'thin', color: { rgb: 'D1D5DB' } },
-              bottom: { style: 'thin', color: { rgb: 'D1D5DB' } },
-              left: { style: 'thin', color: { rgb: 'D1D5DB' } },
-              right: { style: 'thin', color: { rgb: 'D1D5DB' } },
-            },
-          },
-        };
-      } else {
-        worksheet[cell] = {
-          v: value || '',
-          t: 's',
-          s: {
-            border: {
-              top: { style: 'thin', color: { rgb: 'D1D5DB' } },
-              bottom: { style: 'thin', color: { rgb: 'D1D5DB' } },
-              left: { style: 'thin', color: { rgb: 'D1D5DB' } },
-              right: { style: 'thin', color: { rgb: 'D1D5DB' } },
-            },
-          },
-        };
+      if (value === null || value === undefined) return '';
+
+      switch (col.format) {
+        case 'currency':
+          return typeof value === 'number' ? formatCurrency(value) : value;
+        case 'date':
+          return formatDate(value);
+        case 'number':
+          return typeof value === 'number' ? value : parseFloat(value) || 0;
+        default:
+          return value;
       }
     });
+    rows.push(row);
   });
-
-  currentRow += data.length;
 
   if (totals) {
-    currentRow++;
-    columns.forEach((col, colIdx) => {
-      const cell = XLSX.utils.encode_cell({ r: currentRow, c: colIdx });
-      const totalValue = totals[col.key];
-
-      if (totalValue !== undefined) {
-        if (typeof totalValue === 'number' && col.format === 'currency') {
-          worksheet[cell] = {
-            v: totalValue,
-            t: 'n',
-            z: 'R$ #,##0.00',
-            s: {
-              font: { bold: true },
-              border: {
-                top: { style: 'thin', color: { rgb: '000000' } },
-                bottom: { style: 'thin', color: { rgb: '000000' } },
-                left: { style: 'thin', color: { rgb: '000000' } },
-                right: { style: 'thin', color: { rgb: '000000' } },
-              },
-            },
-          };
-        } else {
-          worksheet[cell] = {
-            v: totalValue,
-            t: 's',
-            s: {
-              font: { bold: true },
-              border: {
-                top: { style: 'thin', color: { rgb: '000000' } },
-                bottom: { style: 'thin', color: { rgb: '000000' } },
-                left: { style: 'thin', color: { rgb: '000000' } },
-                right: { style: 'thin', color: { rgb: '000000' } },
-              },
-            },
-          };
+    rows.push([]);
+    const totalRow = columns.map((col) => {
+      if (totals[col.key] !== undefined) {
+        const value = totals[col.key];
+        if (col.format === 'currency' && typeof value === 'number') {
+          return formatCurrency(value);
         }
+        return value;
       }
+      return '';
     });
+    rows.push(totalRow);
   }
 
-  const range = XLSX.utils.decode_range(
-    XLSX.utils.encode_cell({ r: 0, c: 0 }) +
-      ':' +
-      XLSX.utils.encode_cell({ r: currentRow, c: columns.length - 1 })
-  );
-  worksheet['!ref'] = XLSX.utils.encode_range(range);
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
 
-  const colWidths = columns.map((col) => ({
+  const columnWidths = columns.map((col) => ({
     wch: col.width || 15,
   }));
-  worksheet['!cols'] = colWidths;
+  worksheet['!cols'] = columnWidths;
 
+  const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
 
-  const timestamp = format(new Date(), 'yyyy-MM-dd-HHmm');
-  const finalFilename = `${filename}-${timestamp}.xlsx`;
-
-  XLSX.writeFile(workbook, finalFilename);
+  XLSX.writeFile(workbook, filename);
 }
 
-export function generateMultiSheetExcelReport(
-  sheets: { sheetName: string; options: Omit<ExcelOptions, 'filename'> }[],
-  filename: string
-) {
-  const workbook = XLSX.utils.book_new();
+export function exportRelatorioGeral(ledger: any[], periodo: string) {
+  const columns: ExcelColumn[] = [
+    { header: 'Data', key: 'data', format: 'date', width: 12 },
+    { header: 'Tipo', key: 'tipo', width: 10 },
+    { header: 'Forma', key: 'forma', width: 10 },
+    { header: 'Categoria', key: 'categoria', width: 20 },
+    { header: 'Descrição', key: 'descricao', width: 40 },
+    { header: 'Valor', key: 'valor', format: 'currency', width: 15 },
+    { header: 'Conciliado', key: 'conciliado_text', width: 12 },
+  ];
 
-  sheets.forEach(({ sheetName, options }) => {
-    const worksheet: any = {};
-    const { title, period, columns, data, totals } = options;
+  const data = ledger.map((item) => ({
+    ...item,
+    conciliado_text: item.conciliado ? 'Sim' : 'Não',
+  }));
 
-    let currentRow = 0;
+  const totalEntradas = ledger
+    .filter((i) => i.tipo === 'entrada')
+    .reduce((sum, i) => sum + (i.valor || 0), 0);
 
-    if (title || period) {
-      const titleText = [title, period].filter(Boolean).join(' - ');
-      worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: columns.length - 1 } }];
-      worksheet['A1'] = { v: titleText, t: 's', s: { font: { bold: true, sz: 14 }, alignment: { horizontal: 'center' } } };
-      currentRow = 2;
-    }
+  const totalSaidas = ledger
+    .filter((i) => i.tipo === 'saida')
+    .reduce((sum, i) => sum + (i.valor || 0), 0);
 
-    const headerRow = currentRow;
-    columns.forEach((col, idx) => {
-      const cell = XLSX.utils.encode_cell({ r: headerRow, c: idx });
-      worksheet[cell] = {
-        v: col.header,
-        t: 's',
-        s: {
-          font: { bold: true },
-          fill: { fgColor: { rgb: 'E5E7EB' } },
-          border: {
-            top: { style: 'thin', color: { rgb: '000000' } },
-            bottom: { style: 'thin', color: { rgb: '000000' } },
-            left: { style: 'thin', color: { rgb: '000000' } },
-            right: { style: 'thin', color: { rgb: '000000' } },
-          },
-        },
-      };
-    });
+  const saldo = totalEntradas - totalSaidas;
 
-    currentRow++;
+  const totals = {
+    descricao: 'TOTAIS',
+    valor: saldo,
+  };
 
-    data.forEach((row, rowIdx) => {
-      columns.forEach((col, colIdx) => {
-        const cell = XLSX.utils.encode_cell({ r: currentRow + rowIdx, c: colIdx });
-        let value = row[col.key];
-
-        if (col.format === 'currency' && typeof value === 'number') {
-          worksheet[cell] = {
-            v: value,
-            t: 'n',
-            z: 'R$ #,##0.00',
-            s: {
-              border: {
-                top: { style: 'thin', color: { rgb: 'D1D5DB' } },
-                bottom: { style: 'thin', color: { rgb: 'D1D5DB' } },
-                left: { style: 'thin', color: { rgb: 'D1D5DB' } },
-                right: { style: 'thin', color: { rgb: 'D1D5DB' } },
-              },
-            },
-          };
-        } else if (col.format === 'date' && value) {
-          try {
-            const date = new Date(value);
-            worksheet[cell] = {
-              v: format(date, 'dd/MM/yyyy'),
-              t: 's',
-              s: {
-                border: {
-                  top: { style: 'thin', color: { rgb: 'D1D5DB' } },
-                  bottom: { style: 'thin', color: { rgb: 'D1D5DB' } },
-                  left: { style: 'thin', color: { rgb: 'D1D5DB' } },
-                  right: { style: 'thin', color: { rgb: 'D1D5DB' } },
-                },
-              },
-            };
-          } catch (e) {
-            worksheet[cell] = { v: value, t: 's' };
-          }
-        } else {
-          worksheet[cell] = {
-            v: value || '',
-            t: 's',
-            s: {
-              border: {
-                top: { style: 'thin', color: { rgb: 'D1D5DB' } },
-                bottom: { style: 'thin', color: { rgb: 'D1D5DB' } },
-                left: { style: 'thin', color: { rgb: 'D1D5DB' } },
-                right: { style: 'thin', color: { rgb: 'D1D5DB' } },
-              },
-            },
-          };
-        }
-      });
-    });
-
-    currentRow += data.length;
-
-    if (totals) {
-      currentRow++;
-      columns.forEach((col, colIdx) => {
-        const cell = XLSX.utils.encode_cell({ r: currentRow, c: colIdx });
-        const totalValue = totals[col.key];
-
-        if (totalValue !== undefined) {
-          if (typeof totalValue === 'number' && col.format === 'currency') {
-            worksheet[cell] = {
-              v: totalValue,
-              t: 'n',
-              z: 'R$ #,##0.00',
-              s: {
-                font: { bold: true },
-                border: {
-                  top: { style: 'thin', color: { rgb: '000000' } },
-                  bottom: { style: 'thin', color: { rgb: '000000' } },
-                  left: { style: 'thin', color: { rgb: '000000' } },
-                  right: { style: 'thin', color: { rgb: '000000' } },
-                },
-              },
-            };
-          } else {
-            worksheet[cell] = {
-              v: totalValue,
-              t: 's',
-              s: {
-                font: { bold: true },
-                border: {
-                  top: { style: 'thin', color: { rgb: '000000' } },
-                  bottom: { style: 'thin', color: { rgb: '000000' } },
-                  left: { style: 'thin', color: { rgb: '000000' } },
-                  right: { style: 'thin', color: { rgb: '000000' } },
-                },
-              },
-            };
-          }
-        }
-      });
-    }
-
-    const range = XLSX.utils.decode_range(
-      XLSX.utils.encode_cell({ r: 0, c: 0 }) +
-        ':' +
-        XLSX.utils.encode_cell({ r: currentRow, c: columns.length - 1 })
-    );
-    worksheet['!ref'] = XLSX.utils.encode_range(range);
-
-    const colWidths = columns.map((col) => ({
-      wch: col.width || 15,
-    }));
-    worksheet['!cols'] = colWidths;
-
-    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  generateFormattedExcel({
+    title: 'Relatório Geral - Dashboard Águia',
+    period: periodo,
+    columns,
+    data,
+    filename: `relatorio_geral_${new Date().getTime()}.xlsx`,
+    sheetName: 'Relatório Geral',
+    totals,
   });
+}
 
-  const timestamp = format(new Date(), 'yyyy-MM-dd-HHmm');
-  const finalFilename = `${filename}-${timestamp}.xlsx`;
+export function exportMensalistas(mensalistas: any[], periodo: string) {
+  const columns: ExcelColumn[] = [
+    { header: 'Nome', key: 'nome', width: 25 },
+    { header: 'Função', key: 'funcao', width: 20 },
+    { header: 'Salário', key: 'salario', format: 'currency', width: 15 },
+    { header: 'VT', key: 'vale_transporte', format: 'currency', width: 12 },
+    { header: 'Status', key: 'status', width: 12 },
+  ];
 
-  XLSX.writeFile(workbook, finalFilename);
+  const totalSalarios = mensalistas.reduce((sum, m) => sum + (m.salario || 0), 0);
+  const totalVT = mensalistas.reduce((sum, m) => sum + (m.vale_transporte || 0), 0);
+
+  const totals = {
+    nome: 'TOTAIS',
+    salario: totalSalarios,
+    vale_transporte: totalVT,
+  };
+
+  generateFormattedExcel({
+    title: 'Relatório de Mensalistas',
+    period: periodo,
+    columns,
+    data: mensalistas,
+    filename: `mensalistas_${new Date().getTime()}.xlsx`,
+    sheetName: 'Mensalistas',
+    totals,
+  });
+}
+
+export function exportDiaristas(lancamentos: any[], periodo: string) {
+  const columns: ExcelColumn[] = [
+    { header: 'Nome', key: 'diarista_nome', width: 25 },
+    { header: 'Data', key: 'data', format: 'date', width: 12 },
+    { header: 'Horas', key: 'horas_trabalhadas', format: 'number', width: 10 },
+    { header: 'Valor/Hora', key: 'valor_hora', format: 'currency', width: 12 },
+    { header: 'Total', key: 'total', format: 'currency', width: 15 },
+    { header: 'Obra', key: 'obra', width: 20 },
+  ];
+
+  const totalGeral = lancamentos.reduce((sum, l) => sum + (l.total || 0), 0);
+
+  const totals = {
+    obra: 'TOTAL GERAL',
+    total: totalGeral,
+  };
+
+  generateFormattedExcel({
+    title: 'Relatório de Diaristas',
+    period: periodo,
+    columns,
+    data: lancamentos,
+    filename: `diaristas_${new Date().getTime()}.xlsx`,
+    sheetName: 'Diaristas',
+    totals,
+  });
+}
+
+export function exportMaquinas(maquinas: any[], periodo: string) {
+  const columns: ExcelColumn[] = [
+    { header: 'Item', key: 'item', width: 30 },
+    { header: 'Categoria', key: 'categoria', width: 20 },
+    { header: 'Quantidade', key: 'quantidade', format: 'number', width: 12 },
+    { header: 'Disponível', key: 'quantidade_disponivel', format: 'number', width: 12 },
+    { header: 'Valor Unit.', key: 'valor_unitario', format: 'currency', width: 15 },
+    { header: 'Valor Total', key: 'valor_total', format: 'currency', width: 15 },
+    { header: 'Diária', key: 'valor_diaria', format: 'currency', width: 12 },
+    { header: 'Status', key: 'status', width: 15 },
+  ];
+
+  const totalInvestido = maquinas.reduce((sum, m) => sum + (m.valor_total || 0), 0);
+
+  const totals = {
+    item: 'TOTAL INVESTIDO',
+    valor_total: totalInvestido,
+  };
+
+  generateFormattedExcel({
+    title: 'Relatório de Maquinário',
+    period: periodo,
+    columns,
+    data: maquinas,
+    filename: `maquinas_${new Date().getTime()}.xlsx`,
+    sheetName: 'Maquinário',
+    totals,
+  });
+}
+
+export function exportContratos(contratos: any[], periodo: string) {
+  const columns: ExcelColumn[] = [
+    { header: 'Máquina', key: 'maquina_item', width: 30 },
+    { header: 'Cliente', key: 'cliente', width: 25 },
+    { header: 'Obra', key: 'obra', width: 20 },
+    { header: 'Data Início', key: 'data_inicio', format: 'date', width: 12 },
+    { header: 'Data Fim', key: 'data_fim', format: 'date', width: 12 },
+    { header: 'Diárias', key: 'dias_locacao', format: 'number', width: 10 },
+    { header: 'Valor Total', key: 'valor_total', format: 'currency', width: 15 },
+    { header: 'Recebido', key: 'recebido_text', width: 10 },
+  ];
+
+  const data = contratos.map((c) => ({
+    ...c,
+    recebido_text: c.recebido ? 'Sim' : 'Não',
+  }));
+
+  const totalRecebido = contratos
+    .filter((c) => c.recebido)
+    .reduce((sum, c) => sum + (c.valor_total || 0), 0);
+
+  const totalPendente = contratos
+    .filter((c) => !c.recebido)
+    .reduce((sum, c) => sum + (c.valor_total || 0), 0);
+
+  const totals = {
+    obra: 'TOTAIS',
+    valor_total: totalRecebido + totalPendente,
+  };
+
+  generateFormattedExcel({
+    title: 'Relatório de Contratos de Locação',
+    period: periodo,
+    columns,
+    data,
+    filename: `contratos_${new Date().getTime()}.xlsx`,
+    sheetName: 'Contratos',
+    totals,
+  });
+}
+
+export function exportObras(receitas: any[], periodo: string) {
+  const columns: ExcelColumn[] = [
+    { header: 'Obra', key: 'obra_nome', width: 30 },
+    { header: 'Cliente', key: 'cliente', width: 25 },
+    { header: 'Descrição', key: 'descricao', width: 30 },
+    { header: 'Vencimento', key: 'vencimento', format: 'date', width: 12 },
+    { header: 'Valor Total', key: 'valor_total', format: 'currency', width: 15 },
+    { header: 'Recebido', key: 'recebido_text', width: 10 },
+  ];
+
+  const data = receitas.map((r) => ({
+    ...r,
+    recebido_text: r.recebido ? 'Sim' : 'Não',
+  }));
+
+  const totalGeral = receitas.reduce((sum, r) => sum + (r.valor_total || 0), 0);
+
+  const totals = {
+    descricao: 'TOTAL GERAL',
+    valor_total: totalGeral,
+  };
+
+  generateFormattedExcel({
+    title: 'Relatório de Obras e Receitas',
+    period: periodo,
+    columns,
+    data,
+    filename: `obras_${new Date().getTime()}.xlsx`,
+    sheetName: 'Obras',
+    totals,
+  });
+}
+
+export function exportEntradasSaidas(
+  movimentacoes: any[],
+  tipo: 'entradas' | 'saidas',
+  forma: 'banco' | 'dinheiro',
+  periodo: string
+) {
+  const columns: ExcelColumn[] = [
+    { header: 'Data', key: 'data', format: 'date', width: 12 },
+    { header: 'Categoria', key: 'categoria', width: 20 },
+    { header: 'Descrição', key: 'descricao', width: 40 },
+    { header: 'Valor', key: 'valor', format: 'currency', width: 15 },
+    { header: 'Conciliado', key: 'conciliado_text', width: 12 },
+  ];
+
+  const data = movimentacoes.map((m) => ({
+    ...m,
+    conciliado_text: m.conciliado ? 'Sim' : 'Não',
+  }));
+
+  const total = movimentacoes.reduce((sum, m) => sum + (m.valor || 0), 0);
+
+  const totals = {
+    descricao: 'TOTAL',
+    valor: total,
+  };
+
+  const tituloTipo = tipo === 'entradas' ? 'Entradas' : 'Saídas';
+  const tituloForma = forma === 'banco' ? 'Banco' : 'Dinheiro';
+
+  generateFormattedExcel({
+    title: `${tituloTipo} - ${tituloForma}`,
+    period: periodo,
+    columns,
+    data,
+    filename: `${tipo}_${forma}_${new Date().getTime()}.xlsx`,
+    sheetName: `${tituloTipo} ${tituloForma}`,
+    totals,
+  });
 }
