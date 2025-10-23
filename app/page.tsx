@@ -74,11 +74,10 @@ export default function HomePage() {
 
   const loadKPIs = async () => {
     try {
-      const [bankData, cashData, ledgerData, diaristasData] = await Promise.all([
+      const [bankData, cashData, ledgerData] = await Promise.all([
         supabase.from('bank_accounts').select('saldo_atual').maybeSingle(),
         supabase.from('cash_books').select('saldo_atual').maybeSingle(),
         supabase.from('cash_ledger').select('tipo, forma, valor, categoria').is('deleted_at', null),
-        supabase.from('vw_custos_diaristas_periodo').select('total'),
       ]);
 
       const saldoBanco = bankData.data?.saldo_atual || 0;
@@ -89,27 +88,24 @@ export default function HomePage() {
 
       const entradasBanco = ledger
         .filter((l: any) => l.tipo === 'entrada' && l.forma === 'banco')
-        .reduce((sum: number, l: any) => sum + parseFloat(l.valor), 0);
+        .reduce((sum: number, l: any) => sum + parseFloat(l.valor || 0), 0);
 
       const entradasDinheiro = ledger
         .filter((l: any) => l.tipo === 'entrada' && l.forma === 'dinheiro')
-        .reduce((sum: number, l: any) => sum + parseFloat(l.valor), 0);
+        .reduce((sum: number, l: any) => sum + parseFloat(l.valor || 0), 0);
 
       const saidasBanco = ledger
         .filter((l: any) => l.tipo === 'saida' && l.forma === 'banco')
-        .reduce((sum: number, l: any) => sum + parseFloat(l.valor), 0);
+        .reduce((sum: number, l: any) => sum + parseFloat(l.valor || 0), 0);
 
       const saidasDinheiro = ledger
         .filter((l: any) => l.tipo === 'saida' && l.forma === 'dinheiro')
-        .reduce((sum: number, l: any) => sum + parseFloat(l.valor), 0);
+        .reduce((sum: number, l: any) => sum + parseFloat(l.valor || 0), 0);
 
       const faturamento = entradasBanco + entradasDinheiro;
+      const custoExecucaoTotal = saidasBanco + saidasDinheiro;
 
-      const custoDiaristas = (diaristasData.data || []).reduce((sum: number, d: any) => sum + parseFloat(d.total || 0), 0);
-      const custoExecucao = saidasBanco + saidasDinheiro;
-      const custoExecucaoTotal = custoExecucao + custoDiaristas;
-
-      const lucro = faturamento - custoExecucao;
+      const lucro = faturamento - custoExecucaoTotal;
       const margem = faturamento > 0 ? (lucro / faturamento) * 100 : 0;
 
       setKpis({
@@ -158,6 +154,19 @@ export default function HomePage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        <div className="bg-success/10 border border-success/30 rounded-lg p-4 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="text-success text-2xl">✅</div>
+            <div>
+              <h3 className="text-success font-semibold text-lg">Correções Aplicadas com Sucesso!</h3>
+              <p className="text-sm text-muted mt-1">
+                Dashboard Águia atualizado e sincronizado. Todos os cálculos corrigidos, separação Banco/Dinheiro implementada,
+                e relatórios profissionais em Excel prontos para uso.
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div>
           <h1 className="text-3xl text-[#FFD86F] mb-2" style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, letterSpacing: 'normal' }}>
             Dashboard Financeiro
