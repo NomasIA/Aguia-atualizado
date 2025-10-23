@@ -10,9 +10,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { format, startOfMonth, getDay } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { createLedgerEntry, recalcAll, deleteLedgerEntry } from '@/lib/ledger-sync';
 import { revalidateAfterFolha, revalidateAll } from '@/lib/revalidation-utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { getPaymentDate, formatPaymentDateInfo } from '@/lib/business-days';
 
 interface Mensalista {
   id: string;
@@ -44,6 +46,8 @@ interface ModalData {
   totalFuncionarios: number;
   totalPagar: number;
   detalhes: Array<{ nome: string; valor: number }>;
+  dataPagamento?: Date;
+  dataOriginal?: Date;
 }
 
 export default function MensalistasContent() {
@@ -130,26 +134,22 @@ export default function MensalistasContent() {
     return salario + ajuda + vale + vt;
   };
 
-  const getDataPagamento = (tipo: TipoPagamento) => {
+  const getDataPagamento = async (tipo: TipoPagamento): Promise<Date> => {
     const [ano, mes] = competencia.split('-');
-    const dataBase = new Date(parseInt(ano), parseInt(mes) - 1, 1);
 
-    if (tipo === 'SALARIO_5') {
-      return new Date(dataBase.getFullYear(), dataBase.getMonth(), 5);
-    } else if (tipo === 'VALE_20') {
-      return new Date(dataBase.getFullYear(), dataBase.getMonth(), 20);
-    } else {
-      const ultimoDia = new Date(dataBase.getFullYear(), dataBase.getMonth() + 1, 0);
-      let dia = ultimoDia.getDate();
-      let data = new Date(dataBase.getFullYear(), dataBase.getMonth(), dia);
-
-      while (getDay(data) === 0 || getDay(data) === 6) {
-        dia--;
-        data = new Date(dataBase.getFullYear(), dataBase.getMonth(), dia);
-      }
-
-      return data;
+    let day = 5;
+    if (tipo === 'VALE_20') {
+      day = 20;
     }
+
+    const adjustedDate = await getPaymentDate(
+      parseInt(ano),
+      parseInt(mes),
+      day,
+      tipo
+    );
+
+    return adjustedDate;
   };
 
   const getTipoLabel = (tipo: TipoPagamento) => {
@@ -189,7 +189,7 @@ export default function MensalistasContent() {
     return { detalhes, total, count };
   };
 
-  const abrirModalConfirmacao = (tipo: TipoPagamento) => {
+  const abrirModalConfirmacao = async (tipo: TipoPagamento) => {
     const jaProcessado = payrollRuns.find(r => r.tipo === tipo && r.status === 'processado');
 
     if (jaProcessado) {
@@ -212,11 +212,18 @@ export default function MensalistasContent() {
       return;
     }
 
+    const [ano, mes] = competencia.split('-');
+    const diaOriginal = tipo === 'SALARIO_5' ? 5 : tipo === 'VALE_20' ? 20 : new Date(parseInt(ano), parseInt(mes), 0).getDate();
+    const dataOriginal = new Date(parseInt(ano), parseInt(mes) - 1, diaOriginal);
+    const dataPagamento = await getDataPagamento(tipo);
+
     setModalData({
       tipo,
       totalFuncionarios: count,
       totalPagar: total,
-      detalhes
+      detalhes,
+      dataPagamento,
+      dataOriginal
     });
     setModalOpen(true);
   };
@@ -228,7 +235,7 @@ export default function MensalistasContent() {
 
     try {
       const competenciaDate = startOfMonth(new Date(competencia + '-01'));
-      const dataPagamento = getDataPagamento(modalData.tipo);
+      const dataPagamento = await getDataPagamento(modalData.tipo);
 
       const descricao = `Folha Mensalistas • ${getTipoLabel(modalData.tipo)} • ${competencia}`;
       const categoria = modalData.tipo === 'SALARIO_5' ? 'salario' :
@@ -712,6 +719,42 @@ export default function MensalistasContent() {
                   <p className="font-medium text-white">Itaú</p>
                 </div>
               </div>
+
+              {modalData.dataPagamento && modalData.dataOriginal && (
+                <div className="bg-gold/10 border border-gold/20 rounded-lg p-3">
+                  <p className="text-sm font-semibold text-gold mb-2">Data de Pagamento</p>
+                  <div className="space-y-1 text-sm">
+                    {modalData.dataPagamento.getTime() === modalData.dataOriginal.getTime() ? (
+                      <div className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-green-500" />
+                        <span className="text-white font-medium">
+                          {format(modalData.dataPagamento, 'dd/MM/yyyy (EEEE)', { locale: ptBR })}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 text-orange-500" />
+                          <span className="text-muted">
+                            Data original: {format(modalData.dataOriginal, 'dd/MM/yyyy (EEEE)', { locale: ptBR })}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-green-500" />
+                          <span className="text-white font-medium">
+                            Data ajustada: {format(modalData.dataPagamento, 'dd/MM/yyyy (EEEE)', { locale: ptBR })}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted italic ml-6">
+                          {getDay(modalData.dataOriginal) === 6 && 'Ajustado: Sábado → Sexta-feira anterior'}
+                          {getDay(modalData.dataOriginal) === 0 && 'Ajustado: Domingo → Próximo dia útil'}
+                          {getDay(modalData.dataOriginal) !== 0 && getDay(modalData.dataOriginal) !== 6 && 'Ajustado: Feriado → Dia útil anterior'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="border-t border-border pt-4">
                 <p className="text-sm text-muted mb-2">Detalhamento:</p>
