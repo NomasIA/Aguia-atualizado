@@ -53,10 +53,22 @@ export default function HomePage() {
       loadKPIs();
     };
 
+    const handleRevalidateAll = () => {
+      loadKPIs();
+    };
+
+    const handleRevalidateOverview = () => {
+      loadKPIs();
+    };
+
     window.addEventListener('kpi-refresh', handleKPIRefresh);
+    window.addEventListener('revalidate-all', handleRevalidateAll);
+    window.addEventListener('revalidate-overview', handleRevalidateOverview);
 
     return () => {
       window.removeEventListener('kpi-refresh', handleKPIRefresh);
+      window.removeEventListener('revalidate-all', handleRevalidateAll);
+      window.removeEventListener('revalidate-overview', handleRevalidateOverview);
     };
   }, []);
 
