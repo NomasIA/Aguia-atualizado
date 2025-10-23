@@ -45,10 +45,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user) {
-    return null;
-  }
-
   return (
     <div className="flex min-h-screen">
       <aside className="w-64 bg-surface/40 backdrop-blur-xl border-r border-border flex flex-col">
@@ -80,18 +76,28 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="p-4 border-t border-border">
-          <div className="bg-panel/50 rounded-lg p-4 mb-3">
-            <p className="text-xs text-muted mb-1">Conectado como</p>
-            <p className="text-sm font-medium text-text truncate">{user.email}</p>
-          </div>
-          <Button
-            onClick={signOut}
-            variant="outline"
-            className="w-full btn-secondary"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            Sair
-          </Button>
+          {user ? (
+            <>
+              <div className="bg-panel/50 rounded-lg p-4 mb-3">
+                <p className="text-xs text-muted mb-1">Conectado como</p>
+                <p className="text-sm font-medium text-text truncate">{user.email}</p>
+              </div>
+              <Button
+                onClick={signOut}
+                variant="outline"
+                className="w-full btn-secondary"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Sair
+              </Button>
+            </>
+          ) : (
+            <Link href="/login">
+              <Button variant="outline" className="w-full btn-primary">
+                Fazer Login
+              </Button>
+            </Link>
+          )}
         </div>
       </aside>
 
