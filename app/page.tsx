@@ -9,127 +9,80 @@ import {
   TrendingUp,
   TrendingDown,
   Wallet,
-  Building2,
-  Users,
-  Wrench
+  ArrowUpRight,
+  ArrowDownRight,
+  Activity,
+  Building2
 } from 'lucide-react';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
-interface KPI {
-  saldoBanco: number;
-  saldoDinheiro: number;
-  saldoTotal: number;
-  entradasBanco: number;
-  entradasDinheiro: number;
-  saidasBanco: number;
-  saidasDinheiro: number;
-  faturamento: number;
-  lucroOperacional: number;
-  margemOperacional: number;
-  custoExecucaoInterna: number;
+interface KPIData {
+  saldo_banco: number;
+  saldo_dinheiro: number;
+  total_entradas: number;
+  total_saidas: number;
+  lucro_operacional: number;
+  count_entradas: number;
+  count_saidas: number;
+  count_conciliados: number;
+  count_pendentes: number;
+  ultima_atualizacao: string;
+}
+
+interface Movimentacao {
+  id: string;
+  data: string;
+  tipo: 'entrada' | 'saida';
+  forma: 'banco' | 'dinheiro';
+  categoria: string;
+  origem: string;
+  descricao: string;
+  valor: number;
+  conciliado: boolean;
+  created_at: string;
 }
 
 export default function HomePage() {
-  const [kpis, setKpis] = useState<KPI>({
-    saldoBanco: 0,
-    saldoDinheiro: 0,
-    saldoTotal: 0,
-    entradasBanco: 0,
-    entradasDinheiro: 0,
-    saidasBanco: 0,
-    saidasDinheiro: 0,
-    faturamento: 0,
-    lucroOperacional: 0,
-    margemOperacional: 0,
-    custoExecucaoInterna: 0,
-  });
+  const [kpis, setKpis] = useState<KPIData | null>(null);
+  const [ultimas, setUltimas] = useState<Movimentacao[]>([]);
   const [loading, setLoading] = useState(true);
-  const [chartData, setChartData] = useState<any[]>([]);
 
   useEffect(() => {
-    loadKPIs();
+    loadData();
 
-    const handleKPIRefresh = () => {
-      loadKPIs();
-    };
-
-    const handleRevalidateAll = () => {
-      loadKPIs();
-    };
-
-    const handleRevalidateOverview = () => {
-      loadKPIs();
-    };
-
-    window.addEventListener('kpi-refresh', handleKPIRefresh);
-    window.addEventListener('revalidate-all', handleRevalidateAll);
-    window.addEventListener('revalidate-overview', handleRevalidateOverview);
+    const handleRefresh = () => loadData();
+    window.addEventListener('kpi-refresh', handleRefresh);
+    window.addEventListener('revalidate-all', handleRefresh);
+    window.addEventListener('revalidate-overview', handleRefresh);
 
     return () => {
-      window.removeEventListener('kpi-refresh', handleKPIRefresh);
-      window.removeEventListener('revalidate-all', handleRevalidateAll);
-      window.removeEventListener('revalidate-overview', handleRevalidateOverview);
+      window.removeEventListener('kpi-refresh', handleRefresh);
+      window.removeEventListener('revalidate-all', handleRefresh);
+      window.removeEventListener('revalidate-overview', handleRefresh);
     };
   }, []);
 
-  const loadKPIs = async () => {
+  const loadData = async () => {
     try {
-      const [bankData, cashData, ledgerData] = await Promise.all([
-        supabase.from('bank_accounts').select('saldo_atual').maybeSingle(),
-        supabase.from('cash_books').select('saldo_atual').maybeSingle(),
-        supabase.from('cash_ledger').select('tipo, forma, valor, categoria').is('deleted_at', null),
+      setLoading(true);
+
+      const [kpisResult, ultimasResult] = await Promise.all([
+        supabase.from('kpis_realtime').select('*').single(),
+        supabase.from('ultimas_movimentacoes').select('*').limit(5)
       ]);
 
-      const saldoBanco = bankData.data?.saldo_atual || 0;
-      const saldoDinheiro = cashData.data?.saldo_atual || 0;
-      const saldoTotal = saldoBanco + saldoDinheiro;
+      if (kpisResult.data) {
+        setKpis(kpisResult.data);
+      }
 
-      const ledger = ledgerData.data || [];
-
-      const entradasBanco = ledger
-        .filter((l: any) => l.tipo === 'entrada' && l.forma === 'banco')
-        .reduce((sum: number, l: any) => sum + parseFloat(l.valor || 0), 0);
-
-      const entradasDinheiro = ledger
-        .filter((l: any) => l.tipo === 'entrada' && l.forma === 'dinheiro')
-        .reduce((sum: number, l: any) => sum + parseFloat(l.valor || 0), 0);
-
-      const saidasBanco = ledger
-        .filter((l: any) => l.tipo === 'saida' && l.forma === 'banco')
-        .reduce((sum: number, l: any) => sum + parseFloat(l.valor || 0), 0);
-
-      const saidasDinheiro = ledger
-        .filter((l: any) => l.tipo === 'saida' && l.forma === 'dinheiro')
-        .reduce((sum: number, l: any) => sum + parseFloat(l.valor || 0), 0);
-
-      const faturamento = entradasBanco + entradasDinheiro;
-      const custoExecucaoTotal = saidasBanco + saidasDinheiro;
-
-      const lucro = faturamento - custoExecucaoTotal;
-      const margem = faturamento > 0 ? (lucro / faturamento) * 100 : 0;
-
-      setKpis({
-        saldoBanco,
-        saldoDinheiro,
-        saldoTotal,
-        entradasBanco,
-        entradasDinheiro,
-        saidasBanco,
-        saidasDinheiro,
-        faturamento,
-        lucroOperacional: lucro,
-        margemOperacional: margem,
-        custoExecucaoInterna: custoExecucaoTotal,
-      });
-
-      setChartData([
-        { name: 'Banco', Entradas: entradasBanco, Saídas: saidasBanco },
-        { name: 'Dinheiro', Entradas: entradasDinheiro, Saídas: saidasDinheiro },
-      ]);
-
-      setLoading(false);
+      if (ultimasResult.data) {
+        setUltimas(ultimasResult.data);
+      }
     } catch (error) {
-      console.error('Erro ao carregar KPIs:', error);
+      console.error('Erro ao carregar dados:', error);
+    } finally {
       setLoading(false);
     }
   };
@@ -138,14 +91,29 @@ export default function HomePage() {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
+  const chartData = kpis ? [
+    {
+      name: 'Entradas',
+      valor: parseFloat(kpis.total_entradas.toString()),
+      quantidade: kpis.count_entradas
+    },
+    {
+      name: 'Saídas',
+      valor: parseFloat(kpis.total_saidas.toString()),
+      quantidade: kpis.count_saidas
+    }
+  ] : [];
+
+  const saldoTotal = kpis ? parseFloat(kpis.saldo_banco.toString()) + parseFloat(kpis.saldo_dinheiro.toString()) : 0;
+  const margemOperacional = kpis && kpis.total_entradas > 0
+    ? (parseFloat(kpis.lucro_operacional.toString()) / parseFloat(kpis.total_entradas.toString())) * 100
+    : 0;
+
   if (loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-96">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold mx-auto mb-4"></div>
-            <p className="text-muted">Carregando dados...</p>
-          </div>
+          <div className="text-gold text-lg">Carregando...</div>
         </div>
       </DashboardLayout>
     );
@@ -153,179 +121,188 @@ export default function HomePage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="bg-success/10 border border-success/30 rounded-lg p-4 mb-4">
-          <div className="flex items-center gap-3">
-            <div className="text-success text-2xl">✅</div>
-            <div>
-              <h3 className="text-success font-semibold text-lg">Correções Aplicadas com Sucesso!</h3>
-              <p className="text-sm text-muted mt-1">
-                Dashboard Águia atualizado e sincronizado. Todos os cálculos corrigidos, separação Banco/Dinheiro implementada,
-                e relatórios profissionais em Excel prontos para uso.
-              </p>
-            </div>
-          </div>
-        </div>
-
+      <div className="space-y-8">
         <div>
-          <h1 className="text-3xl text-[#FFD86F] mb-2" style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, letterSpacing: 'normal' }}>
-            Dashboard Financeiro
-          </h1>
-          <p className="text-muted" style={{ fontFamily: 'Inter, sans-serif' }}>Visão geral do seu negócio</p>
+          <h1 className="text-3xl font-bold text-gold mb-2">Visão Geral</h1>
+          <p className="text-muted">Dashboard financeiro em tempo real</p>
         </div>
 
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="card hover-lift">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card className="card">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>Saldo Banco</CardTitle>
-              <Building2 className="h-5 w-5 text-info" />
+              <CardTitle className="text-sm font-medium text-muted">Saldo Banco (Itaú)</CardTitle>
+              <Building2 className="h-4 w-4 text-gold" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gold" style={{ fontFamily: 'Orbitron, monospace' }}>{formatCurrency(kpis.saldoBanco)}</div>
-              <span className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-info/10 text-info border border-info/20">
-                Itaú
-              </span>
+              <div className="text-2xl font-bold text-gold">
+                {kpis ? formatCurrency(parseFloat(kpis.saldo_banco.toString())) : 'R$ 0,00'}
+              </div>
+              <p className="text-xs text-muted mt-1">Conta principal</p>
             </CardContent>
           </Card>
 
-          <Card className="card hover-lift">
+          <Card className="card">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>Saldo Dinheiro</CardTitle>
-              <Wallet className="h-5 w-5 text-success" />
+              <CardTitle className="text-sm font-medium text-muted">Saldo Dinheiro</CardTitle>
+              <Wallet className="h-4 w-4 text-gold" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gold" style={{ fontFamily: 'Orbitron, monospace' }}>{formatCurrency(kpis.saldoDinheiro)}</div>
-              <span className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-success/10 text-success border border-success/20">
-                Caixa Físico
-              </span>
+              <div className="text-2xl font-bold text-gold">
+                {kpis ? formatCurrency(parseFloat(kpis.saldo_dinheiro.toString())) : 'R$ 0,00'}
+              </div>
+              <p className="text-xs text-muted mt-1">Caixa físico</p>
             </CardContent>
           </Card>
 
-          <Card className="card hover-lift">
+          <Card className="card">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>Saldo Total</CardTitle>
-              <DollarSign className="h-5 w-5 text-gold" />
+              <CardTitle className="text-sm font-medium text-muted">Saldo Total</CardTitle>
+              <DollarSign className="h-4 w-4 text-gold" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gold" style={{ fontFamily: 'Orbitron, monospace' }}>{formatCurrency(kpis.saldoTotal)}</div>
-              <p className="text-xs text-muted mt-2">Banco + Dinheiro</p>
+              <div className="text-2xl font-bold text-gold">
+                {formatCurrency(saldoTotal)}
+              </div>
+              <p className="text-xs text-muted mt-1">Banco + Dinheiro</p>
             </CardContent>
           </Card>
 
-          <Card className="card hover-lift">
+          <Card className="card">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>Faturamento</CardTitle>
-              <TrendingUp className="h-5 w-5 text-success" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gold" style={{ fontFamily: 'Orbitron, monospace' }}>{formatCurrency(kpis.faturamento)}</div>
-              <p className="text-xs text-muted mt-2">Receitas totais</p>
-            </CardContent>
-          </Card>
-
-          <Card className="card hover-lift">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>Lucro Operacional</CardTitle>
-              {kpis.lucroOperacional >= 0 ? (
-                <TrendingUp className="h-5 w-5 text-success" />
+              <CardTitle className="text-sm font-medium text-muted">Lucro Operacional</CardTitle>
+              {kpis && parseFloat(kpis.lucro_operacional.toString()) >= 0 ? (
+                <TrendingUp className="h-4 w-4 text-green-500" />
               ) : (
-                <TrendingDown className="h-5 w-5 text-danger" />
+                <TrendingDown className="h-4 w-4 text-red-500" />
               )}
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${kpis.lucroOperacional >= 0 ? 'text-success' : 'text-danger'}`}>
-                {formatCurrency(kpis.lucroOperacional)}
+              <div className={`text-2xl font-bold ${kpis && parseFloat(kpis.lucro_operacional.toString()) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                {kpis ? formatCurrency(parseFloat(kpis.lucro_operacional.toString())) : 'R$ 0,00'}
               </div>
-              <p className="text-xs text-muted mt-2">Receitas - Despesas</p>
-            </CardContent>
-          </Card>
-
-          <Card className="card hover-lift">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>Margem Operacional</CardTitle>
-              {kpis.margemOperacional >= 0 ? (
-                <TrendingUp className="h-5 w-5 text-success" />
-              ) : (
-                <TrendingDown className="h-5 w-5 text-danger" />
-              )}
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-bold ${kpis.margemOperacional >= 0 ? 'text-success' : 'text-danger'}`}>
-                {kpis.margemOperacional.toFixed(1)}%
-              </div>
-              <p className="text-xs text-muted mt-2">Lucratividade</p>
-            </CardContent>
-          </Card>
-
-          <Card className="card hover-lift">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>Custo Total do Mês</CardTitle>
-              <DollarSign className="h-5 w-5 text-danger" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-danger" style={{ fontFamily: 'Orbitron, monospace' }}>{formatCurrency(kpis.custoExecucaoInterna)}</div>
-              <p className="text-xs text-muted mt-2">Todas as despesas</p>
+              <p className="text-xs text-muted mt-1">
+                Margem: {margemOperacional.toFixed(1)}%
+              </p>
             </CardContent>
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid gap-4 md:grid-cols-2">
           <Card className="card">
             <CardHeader>
-              <CardTitle>Entradas vs Saídas</CardTitle>
+              <CardTitle className="text-gold">Entradas vs Saídas</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="name" stroke="#9ca3af" />
-                  <YAxis stroke="#9ca3af" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                  <XAxis dataKey="name" stroke="#888" />
+                  <YAxis stroke="#888" />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1a1f2e',
-                      border: '1px solid rgba(245, 199, 66, 0.2)',
-                      borderRadius: '8px',
-                    }}
+                    contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #d4af37' }}
+                    formatter={(value: number) => formatCurrency(value)}
                   />
                   <Legend />
-                  <Bar dataKey="Entradas" fill="#10b981" radius={[8, 8, 0, 0]} />
-                  <Bar dataKey="Saídas" fill="#ef4444" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="valor" fill="#d4af37" name="Valor Total" />
                 </BarChart>
               </ResponsiveContainer>
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <div className="flex items-center gap-2">
+                  <ArrowUpRight className="w-4 h-4 text-green-500" />
+                  <div>
+                    <p className="text-sm text-muted">Entradas</p>
+                    <p className="text-lg font-semibold text-white">
+                      {kpis ? formatCurrency(parseFloat(kpis.total_entradas.toString())) : 'R$ 0,00'}
+                    </p>
+                    <p className="text-xs text-muted">{kpis?.count_entradas || 0} movimentações</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <ArrowDownRight className="w-4 h-4 text-red-500" />
+                  <div>
+                    <p className="text-sm text-muted">Saídas</p>
+                    <p className="text-lg font-semibold text-white">
+                      {kpis ? formatCurrency(parseFloat(kpis.total_saidas.toString())) : 'R$ 0,00'}
+                    </p>
+                    <p className="text-xs text-muted">{kpis?.count_saidas || 0} movimentações</p>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
           <Card className="card">
             <CardHeader>
-              <CardTitle>Evolução do Saldo</CardTitle>
+              <CardTitle className="text-gold flex items-center gap-2">
+                <Activity className="w-5 h-5" />
+                Últimas Movimentações
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart
-                  data={[
-                    { name: 'Início', Banco: kpis.entradasBanco - kpis.saidasBanco, Dinheiro: kpis.entradasDinheiro - kpis.saidasDinheiro },
-                    { name: 'Atual', Banco: kpis.saldoBanco, Dinheiro: kpis.saldoDinheiro },
-                  ]}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="name" stroke="#9ca3af" />
-                  <YAxis stroke="#9ca3af" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1a1f2e',
-                      border: '1px solid rgba(245, 199, 66, 0.2)',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Legend />
-                  <Line type="monotone" dataKey="Banco" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
-                  <Line type="monotone" dataKey="Dinheiro" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} />
-                </LineChart>
-              </ResponsiveContainer>
+              <div className="space-y-3">
+                {ultimas.length === 0 ? (
+                  <p className="text-muted text-center py-8">Nenhuma movimentação registrada</p>
+                ) : (
+                  ultimas.map((mov) => (
+                    <div
+                      key={mov.id}
+                      className="flex items-center justify-between p-3 bg-surface/50 rounded-lg border border-border hover:border-gold/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-full ${mov.tipo === 'entrada' ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                          {mov.tipo === 'entrada' ? (
+                            <ArrowUpRight className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <ArrowDownRight className="w-4 h-4 text-red-500" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-white">
+                            {mov.descricao || mov.categoria || mov.origem || 'Sem descrição'}
+                          </p>
+                          <div className="flex items-center gap-2 text-xs text-muted">
+                            <span>{format(new Date(mov.data), 'dd/MM/yyyy', { locale: ptBR })}</span>
+                            <span>•</span>
+                            <span className="capitalize">{mov.forma}</span>
+                            {mov.conciliado && (
+                              <>
+                                <span>•</span>
+                                <span className="text-green-500">✓ Conciliado</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className={`text-right ${mov.tipo === 'entrada' ? 'text-green-500' : 'text-red-500'} font-semibold`}>
+                        {mov.tipo === 'entrada' ? '+' : '-'}{formatCurrency(parseFloat(mov.valor.toString()))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              {ultimas.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                      <p className="text-xs text-muted mb-1">Conciliadas</p>
+                      <p className="text-lg font-semibold text-green-500">{kpis?.count_conciliados || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted mb-1">Pendentes</p>
+                      <p className="text-lg font-semibold text-orange-500">{kpis?.count_pendentes || 0}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
+
+        {kpis?.ultima_atualizacao && (
+          <div className="text-center text-xs text-muted">
+            Última atualização: {format(new Date(kpis.ultima_atualizacao), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );
