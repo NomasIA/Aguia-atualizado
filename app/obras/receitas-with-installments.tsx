@@ -278,8 +278,11 @@ export default function ReceitasWithInstallments({ obras, onReceitasChange }: Pr
 
       toast({
         title: 'Sucesso',
-        description: 'Parcela marcada como recebida',
+        description: 'Parcela marcada como recebida. Saldos atualizados automaticamente.',
       });
+
+      window.dispatchEvent(new Event('kpi-refresh'));
+      window.dispatchEvent(new Event('revalidate-all'));
 
       loadReceitas();
       onReceitasChange();
@@ -288,6 +291,38 @@ export default function ReceitasWithInstallments({ obras, onReceitasChange }: Pr
       toast({
         title: 'Erro',
         description: 'Não foi possível atualizar a parcela',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const desmarcarRecebido = async (parcelaId: string) => {
+    try {
+      const { error } = await supabase
+        .from('receitas_parcelas')
+        .update({
+          recebido: false,
+          data_recebimento: null,
+        })
+        .eq('id', parcelaId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sucesso',
+        description: 'Recebimento desfeito. Saldos recalculados automaticamente.',
+      });
+
+      window.dispatchEvent(new Event('kpi-refresh'));
+      window.dispatchEvent(new Event('revalidate-all'));
+
+      loadReceitas();
+      onReceitasChange();
+    } catch (error) {
+      console.error('Erro ao desmarcar parcela:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível desfazer o recebimento',
         variant: 'destructive',
       });
     }
@@ -533,13 +568,21 @@ export default function ReceitasWithInstallments({ obras, onReceitasChange }: Pr
                             </td>
                             <td className="p-2 text-center">
                               <div className="flex gap-2 justify-center">
-                                {!parcela.recebido && (
+                                {!parcela.recebido ? (
                                   <Button
                                     size="sm"
                                     onClick={() => marcarRecebido(parcela.id)}
                                     className="btn-primary text-xs"
                                   >
                                     Marcar Recebido
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => desmarcarRecebido(parcela.id)}
+                                    className="btn-secondary text-xs"
+                                  >
+                                    Desfazer
                                   </Button>
                                 )}
                                 <Button
