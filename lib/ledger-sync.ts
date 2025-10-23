@@ -155,7 +155,7 @@ export async function createLedgerEntry(entry: {
   descricao: string;
   valor: number;
   origem?: string;
-  origem_id?: string;
+  origem_id?: string | null;
   obra_id?: string;
   funcionario_id?: string;
   maquina_id?: string;

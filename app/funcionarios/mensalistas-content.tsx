@@ -5,10 +5,11 @@ import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { DollarSign, Banknote, Bus, Check } from 'lucide-react';
-import { format } from 'date-fns';
-import { createLedgerEntry, recalcAll } from '@/lib/ledger-sync';
+import { DollarSign, Banknote, Bus, Check, AlertCircle, Undo2 } from 'lucide-react';
+import { format, startOfMonth, getDay } from 'date-fns';
+import { createLedgerEntry, recalcAll, deleteLedgerEntry } from '@/lib/ledger-sync';
 import { revalidateAfterFolha, revalidateAll } from '@/lib/revalidation-utils';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 
 interface Mensalista {
   id: string;
@@ -23,17 +24,34 @@ interface Mensalista {
   ativo: boolean;
 }
 
-interface Pagamento {
-  tipo_pagamento: 'salario' | 'vale_salario' | 'vt';
-  data_pagamento: string;
-  valor: number;
+interface PayrollRun {
+  id: string;
+  tipo: 'SALARIO_5' | 'VALE_20' | 'VT_ULTIMO_DIA';
+  total_funcionarios: number;
+  total_pago: number;
+  status: 'processado' | 'desfeito';
+  created_at: string;
+  ledger_id: string;
+}
+
+type TipoPagamento = 'SALARIO_5' | 'VALE_20' | 'VT_ULTIMO_DIA';
+
+interface ModalData {
+  tipo: TipoPagamento;
+  totalFuncionarios: number;
+  totalPagar: number;
+  detalhes: Array<{ nome: string; valor: number }>;
 }
 
 export default function MensalistasContent() {
   const [mensalistas, setMensalistas] = useState<Mensalista[]>([]);
-  const [pagamentos, setPagamentos] = useState<Record<string, Record<string, Pagamento>>>({});
+  const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>([]);
   const [loading, setLoading] = useState(true);
-  const [processingPayment, setProcessingPayment] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalData, setModalData] = useState<ModalData | null>(null);
+  const [undoDialogOpen, setUndoDialogOpen] = useState(false);
+  const [selectedRun, setSelectedRun] = useState<PayrollRun | null>(null);
   const { toast } = useToast();
 
   const [competencia, setCompetencia] = useState(() => {
@@ -47,6 +65,8 @@ export default function MensalistasContent() {
 
   const loadData = async () => {
     try {
+      setLoading(true);
+
       const { data: mensalistasData, error: mensalistasError } = await supabase
         .from('funcionarios_mensalistas')
         .select('*')
@@ -56,29 +76,18 @@ export default function MensalistasContent() {
 
       if (mensalistasError) throw mensalistasError;
 
-      const { data: pagamentosData, error: pagamentosError } = await supabase
-        .from('mensalista_pagamentos_competencia')
+      const competenciaDate = startOfMonth(new Date(competencia + '-01'));
+      const { data: runsData, error: runsError } = await supabase
+        .from('payroll_runs')
         .select('*')
-        .eq('competencia', competencia)
-        .is('deleted_at', null);
+        .eq('competencia', format(competenciaDate, 'yyyy-MM-dd'))
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false });
 
-      if (pagamentosError) throw pagamentosError;
+      if (runsError) throw runsError;
 
       setMensalistas(mensalistasData || []);
-
-      const pagamentosMap: Record<string, Record<string, Pagamento>> = {};
-      (pagamentosData || []).forEach((pag: any) => {
-        if (!pagamentosMap[pag.mensalista_id]) {
-          pagamentosMap[pag.mensalista_id] = {};
-        }
-        pagamentosMap[pag.mensalista_id][pag.tipo_pagamento] = {
-          tipo_pagamento: pag.tipo_pagamento,
-          data_pagamento: pag.data_pagamento,
-          valor: parseFloat(pag.valor)
-        };
-      });
-
-      setPagamentos(pagamentosMap);
+      setPayrollRuns(runsData || []);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast({
@@ -105,20 +114,20 @@ export default function MensalistasContent() {
     return salario + ajuda + vale + vt;
   };
 
-  const getDataPagamento = (tipo: 'salario' | 'vale_salario' | 'vt') => {
+  const getDataPagamento = (tipo: TipoPagamento) => {
     const [ano, mes] = competencia.split('-');
     const dataBase = new Date(parseInt(ano), parseInt(mes) - 1, 1);
 
-    if (tipo === 'salario') {
+    if (tipo === 'SALARIO_5') {
       return new Date(dataBase.getFullYear(), dataBase.getMonth(), 5);
-    } else if (tipo === 'vale_salario') {
+    } else if (tipo === 'VALE_20') {
       return new Date(dataBase.getFullYear(), dataBase.getMonth(), 20);
     } else {
       const ultimoDia = new Date(dataBase.getFullYear(), dataBase.getMonth() + 1, 0);
       let dia = ultimoDia.getDate();
       let data = new Date(dataBase.getFullYear(), dataBase.getMonth(), dia);
 
-      while (data.getDay() === 0 || data.getDay() === 6) {
+      while (getDay(data) === 0 || getDay(data) === 6) {
         dia--;
         data = new Date(dataBase.getFullYear(), dataBase.getMonth(), dia);
       }
@@ -127,47 +136,87 @@ export default function MensalistasContent() {
     }
   };
 
-  const handlePagamento = async (
-    mensalista: Mensalista,
-    tipo: 'salario' | 'vale_salario' | 'vt'
-  ) => {
-    const key = `${mensalista.id}-${tipo}`;
-    setProcessingPayment(key);
+  const getTipoLabel = (tipo: TipoPagamento) => {
+    switch (tipo) {
+      case 'SALARIO_5': return 'Salário (dia 5)';
+      case 'VALE_20': return 'Vale-Salário (dia 20)';
+      case 'VT_ULTIMO_DIA': return 'Vale-Transporte (último dia útil)';
+    }
+  };
 
-    try {
+  const calcularTotaisPorTipo = (tipo: TipoPagamento) => {
+    const detalhes: Array<{ nome: string; valor: number }> = [];
+    let total = 0;
+    let count = 0;
+
+    mensalistas.forEach((m) => {
       let valor = 0;
-      let descricao = '';
-      let categoria = tipo;
 
-      if (tipo === 'salario') {
-        valor = parseFloat(mensalista.salario_base?.toString() || '0') +
-                parseFloat(mensalista.ajuda_custo?.toString() || '0');
-        descricao = `Salário ${competencia} - ${mensalista.nome}`;
-      } else if (tipo === 'vale_salario') {
-        valor = parseFloat(mensalista.vale_salario?.toString() || '0');
-        if (valor === 0) {
-          toast({
-            title: 'Aviso',
-            description: 'Este funcionário não tem vale-salário configurado',
-            variant: 'destructive'
-          });
-          return;
+      if (tipo === 'SALARIO_5') {
+        valor = parseFloat(m.salario_base?.toString() || '0') +
+                parseFloat(m.ajuda_custo?.toString() || '0');
+      } else if (tipo === 'VALE_20') {
+        valor = parseFloat(m.vale_salario?.toString() || '0');
+      } else if (tipo === 'VT_ULTIMO_DIA') {
+        if (m.recebe_vt) {
+          valor = calcularVTMensal(m);
         }
-        descricao = `Vale-Salário ${competencia} - ${mensalista.nome}`;
-      } else {
-        if (!mensalista.recebe_vt) {
-          toast({
-            title: 'Aviso',
-            description: 'Este funcionário não recebe vale-transporte',
-            variant: 'destructive'
-          });
-          return;
-        }
-        valor = calcularVTMensal(mensalista);
-        descricao = `Vale-Transporte ${competencia} - ${mensalista.nome}`;
       }
 
-      const dataPagamento = getDataPagamento(tipo);
+      if (valor > 0) {
+        detalhes.push({ nome: m.nome, valor });
+        total += valor;
+        count++;
+      }
+    });
+
+    return { detalhes, total, count };
+  };
+
+  const abrirModalConfirmacao = (tipo: TipoPagamento) => {
+    const jaProcessado = payrollRuns.find(r => r.tipo === tipo && r.status === 'processado');
+
+    if (jaProcessado) {
+      toast({
+        title: 'Aviso',
+        description: 'Este pagamento já foi processado para esta competência',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const { detalhes, total, count } = calcularTotaisPorTipo(tipo);
+
+    if (count === 0) {
+      toast({
+        title: 'Aviso',
+        description: 'Nenhum funcionário elegível para este tipo de pagamento',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setModalData({
+      tipo,
+      totalFuncionarios: count,
+      totalPagar: total,
+      detalhes
+    });
+    setModalOpen(true);
+  };
+
+  const processarPagamento = async () => {
+    if (!modalData) return;
+
+    setProcessing(true);
+
+    try {
+      const competenciaDate = startOfMonth(new Date(competencia + '-01'));
+      const dataPagamento = getDataPagamento(modalData.tipo);
+
+      const descricao = `Folha Mensalistas • ${getTipoLabel(modalData.tipo)} • ${competencia}`;
+      const categoria = modalData.tipo === 'SALARIO_5' ? 'salario' :
+                       modalData.tipo === 'VALE_20' ? 'vale_salario' : 'vt';
 
       const ledger = await createLedgerEntry({
         data: format(dataPagamento, 'yyyy-MM-dd'),
@@ -175,25 +224,25 @@ export default function MensalistasContent() {
         forma: 'banco',
         categoria,
         descricao,
-        valor,
-        origem: 'mensalista',
-        origem_id: mensalista.id,
-        funcionario_id: mensalista.id
+        valor: modalData.totalPagar,
+        origem: 'folha_mensalista',
+        origem_id: null
       });
 
-      const { error: pagError } = await supabase
-        .from('mensalista_pagamentos_competencia')
+      const { error: runError } = await supabase
+        .from('payroll_runs')
         .insert([{
-          mensalista_id: mensalista.id,
-          competencia,
-          tipo_pagamento: tipo,
-          data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
-          valor,
-          forma: 'banco',
-          ledger_id: ledger.id
+          competencia: format(competenciaDate, 'yyyy-MM-dd'),
+          tipo: modalData.tipo,
+          total_funcionarios: modalData.totalFuncionarios,
+          total_pago: modalData.totalPagar,
+          conta_banco: 'Itaú',
+          status: 'processado',
+          ledger_id: ledger.id,
+          detalhes: modalData.detalhes
         }]);
 
-      if (pagError) throw pagError;
+      if (runError) throw runError;
 
       await recalcAll();
       revalidateAfterFolha();
@@ -201,33 +250,68 @@ export default function MensalistasContent() {
 
       toast({
         title: 'Sucesso',
-        description: `Pagamento registrado com sucesso!`
+        description: `Pagamentos processados via Banco Itaú. Total: ${formatCurrency(modalData.totalPagar)}`
       });
 
+      setModalOpen(false);
+      setModalData(null);
       loadData();
     } catch (error: any) {
       console.error('Erro ao processar pagamento:', error);
-
-      if (error.code === '23505') {
-        toast({
-          title: 'Aviso',
-          description: 'Este pagamento já foi processado para esta competência',
-          variant: 'destructive'
-        });
-      } else {
-        toast({
-          title: 'Erro',
-          description: error.message || 'Não foi possível processar o pagamento',
-          variant: 'destructive'
-        });
-      }
+      toast({
+        title: 'Erro',
+        description: error.message || 'Não foi possível processar o pagamento',
+        variant: 'destructive'
+      });
     } finally {
-      setProcessingPayment(null);
+      setProcessing(false);
     }
   };
 
-  const isPago = (mensalistaId: string, tipo: 'salario' | 'vale_salario' | 'vt') => {
-    return pagamentos[mensalistaId]?.[tipo] !== undefined;
+  const desfazerPagamento = async () => {
+    if (!selectedRun) return;
+
+    setProcessing(true);
+
+    try {
+      await deleteLedgerEntry(selectedRun.ledger_id);
+
+      const { error } = await supabase
+        .from('payroll_runs')
+        .update({
+          status: 'desfeito',
+          deleted_at: new Date().toISOString()
+        })
+        .eq('id', selectedRun.id);
+
+      if (error) throw error;
+
+      await recalcAll();
+      revalidateAfterFolha();
+      revalidateAll();
+
+      toast({
+        title: 'Sucesso',
+        description: 'Pagamento desfeito e saldos recalculados'
+      });
+
+      setUndoDialogOpen(false);
+      setSelectedRun(null);
+      loadData();
+    } catch (error: any) {
+      console.error('Erro ao desfazer pagamento:', error);
+      toast({
+        title: 'Erro',
+        description: error.message || 'Não foi possível desfazer o pagamento',
+        variant: 'destructive'
+      });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const isProcessado = (tipo: TipoPagamento) => {
+    return payrollRuns.some(r => r.tipo === tipo && r.status === 'processado');
   };
 
   const formatCurrency = (value: number) => {
@@ -258,6 +342,97 @@ export default function MensalistasContent() {
           </div>
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <Button
+            size="lg"
+            className={isProcessado('SALARIO_5') ? 'btn-success' : 'btn-primary'}
+            onClick={() => abrirModalConfirmacao('SALARIO_5')}
+            disabled={isProcessado('SALARIO_5')}
+          >
+            {isProcessado('SALARIO_5') ? (
+              <>
+                <Check className="w-5 h-5 mr-2" />
+                Salário Pago ✅
+              </>
+            ) : (
+              <>
+                <DollarSign className="w-5 h-5 mr-2" />
+                💸 Pagar Salário (dia 5)
+              </>
+            )}
+          </Button>
+
+          <Button
+            size="lg"
+            className={isProcessado('VALE_20') ? 'btn-success' : 'btn-primary'}
+            onClick={() => abrirModalConfirmacao('VALE_20')}
+            disabled={isProcessado('VALE_20')}
+          >
+            {isProcessado('VALE_20') ? (
+              <>
+                <Check className="w-5 h-5 mr-2" />
+                Vale Pago ✅
+              </>
+            ) : (
+              <>
+                <Banknote className="w-5 h-5 mr-2" />
+                💵 Pagar Vale-Salário (dia 20)
+              </>
+            )}
+          </Button>
+
+          <Button
+            size="lg"
+            className={isProcessado('VT_ULTIMO_DIA') ? 'btn-success' : 'btn-primary'}
+            onClick={() => abrirModalConfirmacao('VT_ULTIMO_DIA')}
+            disabled={isProcessado('VT_ULTIMO_DIA')}
+          >
+            {isProcessado('VT_ULTIMO_DIA') ? (
+              <>
+                <Check className="w-5 h-5 mr-2" />
+                VT Pago ✅
+              </>
+            ) : (
+              <>
+                <Bus className="w-5 h-5 mr-2" />
+                🚎 Pagar VT (último dia útil)
+              </>
+            )}
+          </Button>
+        </div>
+
+        {payrollRuns.filter(r => r.status === 'processado').length > 0 && (
+          <Card className="bg-surface/50 p-4 mb-6 border border-gold/20">
+            <h3 className="text-sm font-semibold text-gold mb-3">Pagamentos Processados</h3>
+            <div className="space-y-2">
+              {payrollRuns.filter(r => r.status === 'processado').map((run) => (
+                <div key={run.id} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span className="text-muted">{getTipoLabel(run.tipo)}</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-white">{run.total_funcionarios} funcionários</span>
+                    <span className="font-semibold text-gold">{formatCurrency(parseFloat(run.total_pago.toString()))}</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7"
+                      onClick={() => {
+                        setSelectedRun(run);
+                        setUndoDialogOpen(true);
+                      }}
+                    >
+                      <Undo2 className="w-3 h-3 mr-1" />
+                      Desfazer
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
         <div className="overflow-x-auto">
           <table className="table-dark">
             <thead>
@@ -269,13 +444,12 @@ export default function MensalistasContent() {
                 <th className="text-right">Vale</th>
                 <th className="text-right">VT Mensal</th>
                 <th className="text-right">Total</th>
-                <th className="text-center">Ações</th>
               </tr>
             </thead>
             <tbody>
               {mensalistas.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-muted py-8">
+                  <td colSpan={7} className="text-center text-muted py-8">
                     Nenhum funcionário cadastrado
                   </td>
                 </tr>
@@ -283,9 +457,6 @@ export default function MensalistasContent() {
                 mensalistas.map((mensalista) => {
                   const vtMensal = calcularVTMensal(mensalista);
                   const custoTotal = calcularCustoTotal(mensalista);
-                  const salarioPago = isPago(mensalista.id, 'salario');
-                  const valePago = isPago(mensalista.id, 'vale_salario');
-                  const vtPago = isPago(mensalista.id, 'vt');
 
                   return (
                     <tr key={mensalista.id}>
@@ -296,70 +467,6 @@ export default function MensalistasContent() {
                       <td className="text-right">{formatCurrency(parseFloat(mensalista.vale_salario?.toString() || '0'))}</td>
                       <td className="text-right">{formatCurrency(vtMensal)}</td>
                       <td className="text-right font-semibold text-gold">{formatCurrency(custoTotal)}</td>
-                      <td>
-                        <div className="flex flex-col gap-2">
-                          <Button
-                            size="sm"
-                            className={salarioPago ? 'btn-success' : 'btn-primary'}
-                            onClick={() => handlePagamento(mensalista, 'salario')}
-                            disabled={salarioPago || processingPayment === `${mensalista.id}-salario`}
-                          >
-                            {salarioPago ? (
-                              <>
-                                <Check className="w-3 h-3 mr-1" />
-                                Salário Pago ✅
-                              </>
-                            ) : (
-                              <>
-                                <DollarSign className="w-3 h-3 mr-1" />
-                                {processingPayment === `${mensalista.id}-salario` ? 'Processando...' : 'Pagar Salário dia 5'}
-                              </>
-                            )}
-                          </Button>
-
-                          {parseFloat(mensalista.vale_salario?.toString() || '0') > 0 && (
-                            <Button
-                              size="sm"
-                              className={valePago ? 'btn-success' : 'btn-primary'}
-                              onClick={() => handlePagamento(mensalista, 'vale_salario')}
-                              disabled={valePago || processingPayment === `${mensalista.id}-vale_salario`}
-                            >
-                              {valePago ? (
-                                <>
-                                  <Check className="w-3 h-3 mr-1" />
-                                  Vale Pago ✅
-                                </>
-                              ) : (
-                                <>
-                                  <Banknote className="w-3 h-3 mr-1" />
-                                  {processingPayment === `${mensalista.id}-vale_salario` ? 'Processando...' : 'Pagar Vale dia 20'}
-                                </>
-                              )}
-                            </Button>
-                          )}
-
-                          {mensalista.recebe_vt && (
-                            <Button
-                              size="sm"
-                              className={vtPago ? 'btn-success' : 'btn-primary'}
-                              onClick={() => handlePagamento(mensalista, 'vt')}
-                              disabled={vtPago || processingPayment === `${mensalista.id}-vt`}
-                            >
-                              {vtPago ? (
-                                <>
-                                  <Check className="w-3 h-3 mr-1" />
-                                  VT Pago ✅
-                                </>
-                              ) : (
-                                <>
-                                  <Bus className="w-3 h-3 mr-1" />
-                                  {processingPayment === `${mensalista.id}-vt` ? 'Processando...' : 'Pagar VT último dia'}
-                                </>
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      </td>
                     </tr>
                   );
                 })
@@ -383,7 +490,6 @@ export default function MensalistasContent() {
                 <td className="text-right font-bold text-gold text-lg">
                   {formatCurrency(mensalistas.reduce((sum, m) => sum + calcularCustoTotal(m), 0))}
                 </td>
-                <td></td>
               </tr>
             </tfoot>
           </table>
@@ -391,38 +497,138 @@ export default function MensalistasContent() {
       </Card>
 
       <Card className="card p-6 bg-surface/50">
-        <h3 className="text-lg font-semibold text-gold mb-4">Legenda de Pagamentos</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="flex items-start gap-3">
-            <DollarSign className="w-5 h-5 text-gold mt-1" />
-            <div>
-              <p className="font-medium text-white">💸 Salário (dia 5)</p>
-              <p className="text-sm text-muted">Salário base + Ajuda de custo</p>
-            </div>
+        <div className="flex items-start gap-3 p-3 bg-gold/10 border border-gold/20 rounded-lg">
+          <AlertCircle className="w-5 h-5 text-gold mt-0.5" />
+          <div className="text-sm text-muted">
+            <p className="font-semibold text-gold mb-2">Como funciona o processamento global:</p>
+            <ul className="space-y-1 list-disc list-inside">
+              <li>Cada botão processa TODOS os funcionários elegíveis de uma vez</li>
+              <li>Cria UM lançamento consolidado no Banco Itaú</li>
+              <li>Atualiza automaticamente: Entradas & Saídas, Caixa & Banco, Conciliação, Relatórios e KPIs</li>
+              <li>Permite desfazer o pagamento por competência (undo)</li>
+              <li>Cada tipo só pode ser processado uma vez por mês</li>
+            </ul>
           </div>
-          <div className="flex items-start gap-3">
-            <Banknote className="w-5 h-5 text-gold mt-1" />
-            <div>
-              <p className="font-medium text-white">💵 Vale-Salário (dia 20)</p>
-              <p className="text-sm text-muted">Adiantamento quinzenal</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <Bus className="w-5 h-5 text-gold mt-1" />
-            <div>
-              <p className="font-medium text-white">🚎 Vale-Transporte (último dia útil)</p>
-              <p className="text-sm text-muted">Créditos de transporte mensal</p>
-            </div>
-          </div>
-        </div>
-        <div className="mt-4 p-3 bg-gold/10 border border-gold/20 rounded-lg">
-          <p className="text-sm text-muted">
-            <strong className="text-gold">Importante:</strong> Cada pagamento só pode ser processado uma vez por competência.
-            Após processar, o lançamento é registrado em <strong>Entradas & Saídas</strong> e atualiza
-            automaticamente a <strong>Visão Geral</strong>, <strong>Caixa & Banco</strong> e <strong>Relatórios</strong>.
-          </p>
         </div>
       </Card>
+
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="bg-background border-border">
+          <DialogHeader>
+            <DialogTitle className="text-gold">Confirmar Processamento</DialogTitle>
+            <DialogDescription>
+              Revise os detalhes antes de processar o pagamento
+            </DialogDescription>
+          </DialogHeader>
+
+          {modalData && (
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted">Competência</p>
+                  <p className="font-medium text-white">{competencia}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted">Tipo</p>
+                  <p className="font-medium text-white">{getTipoLabel(modalData.tipo)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted">Total de Funcionários</p>
+                  <p className="font-medium text-white">{modalData.totalFuncionarios}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted">Conta Bancária</p>
+                  <p className="font-medium text-white">Itaú</p>
+                </div>
+              </div>
+
+              <div className="border-t border-border pt-4">
+                <p className="text-sm text-muted mb-2">Detalhamento:</p>
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {modalData.detalhes.map((d, i) => (
+                    <div key={i} className="flex justify-between text-sm">
+                      <span className="text-muted">{d.nome}</span>
+                      <span className="text-white">{formatCurrency(d.valor)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-border pt-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-lg font-semibold text-gold">Total a Pagar:</span>
+                  <span className="text-2xl font-bold text-gold">{formatCurrency(modalData.totalPagar)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setModalOpen(false)}
+              disabled={processing}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={processarPagamento}
+              disabled={processing}
+              className="btn-primary"
+            >
+              {processing ? 'Processando...' : 'Confirmar Pagamento'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={undoDialogOpen} onOpenChange={setUndoDialogOpen}>
+        <DialogContent className="bg-background border-border">
+          <DialogHeader>
+            <DialogTitle className="text-gold">Desfazer Pagamento</DialogTitle>
+            <DialogDescription>
+              Esta ação irá reverter o pagamento e recalcular todos os saldos
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedRun && (
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted">Tipo</p>
+                  <p className="font-medium text-white">{getTipoLabel(selectedRun.tipo)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted">Valor</p>
+                  <p className="font-medium text-white">{formatCurrency(parseFloat(selectedRun.total_pago.toString()))}</p>
+                </div>
+              </div>
+              <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
+                <p className="text-sm text-muted">
+                  <strong className="text-destructive">Atenção:</strong> O lançamento será marcado como excluído e os saldos serão recalculados.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setUndoDialogOpen(false)}
+              disabled={processing}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={desfazerPagamento}
+              disabled={processing}
+              className="bg-destructive hover:bg-destructive/80"
+            >
+              {processing ? 'Desfazendo...' : 'Confirmar Desfazer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
