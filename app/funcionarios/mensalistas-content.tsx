@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { DollarSign, Banknote, Bus, Check, AlertCircle, Undo2, Plus, Edit, Trash2 } from 'lucide-react';
+import { DollarSign, Banknote, Bus, Check, AlertCircle, Undo2, Plus, Edit, Trash2, Gift } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -15,6 +15,7 @@ import { createLedgerEntry, recalcAll, deleteLedgerEntry } from '@/lib/ledger-sy
 import { revalidateAfterFolha, revalidateAll } from '@/lib/revalidation-utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { getPaymentDate, formatPaymentDateInfo } from '@/lib/business-days';
+import { DecimoTerceiroModal } from './decimo-terceiro-modal';
 
 interface Mensalista {
   id: string;
@@ -61,6 +62,7 @@ export default function MensalistasContent() {
   const [selectedRun, setSelectedRun] = useState<PayrollRun | null>(null);
   const [cadastroDialogOpen, setCadastroDialogOpen] = useState(false);
   const [editingMensalista, setEditingMensalista] = useState<Mensalista | null>(null);
+  const [decimoModalOpen, setDecimoModalOpen] = useState(false);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -78,6 +80,10 @@ export default function MensalistasContent() {
     const now = new Date();
     return format(now, 'yyyy-MM');
   });
+
+  const competenciaAno = parseInt(competencia.split('-')[0]);
+  const competenciaMes = parseInt(competencia.split('-')[1]);
+  const isDezembro = competenciaMes === 12;
 
   useEffect(() => {
     loadData();
@@ -481,6 +487,15 @@ export default function MensalistasContent() {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-gold">Folha de Pagamento - Mensalistas</h2>
           <div className="flex items-center gap-4">
+            {isDezembro && (
+              <Button
+                onClick={() => setDecimoModalOpen(true)}
+                className="bg-gradient-to-r from-gold to-yellow-600 hover:from-gold/90 hover:to-yellow-600/90 text-black font-semibold"
+              >
+                <Gift className="w-4 h-4 mr-2" />
+                13º Salário
+              </Button>
+            )}
             <Button
               onClick={abrirCadastro}
               className="btn-primary"
@@ -1026,6 +1041,14 @@ export default function MensalistasContent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DecimoTerceiroModal
+        open={decimoModalOpen}
+        onOpenChange={setDecimoModalOpen}
+        mensalistas={mensalistas}
+        competenciaAno={competenciaAno}
+        onSuccess={loadData}
+      />
     </div>
   );
 }
