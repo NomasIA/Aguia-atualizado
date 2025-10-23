@@ -11,6 +11,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Plus, Download, Filter, TrendingUp, TrendingDown, Trash2, Edit, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { recalcAll, createLedgerEntry } from '@/lib/ledger-sync';
+import { revalidateAll } from '@/lib/revalidation-utils';
 
 interface Transaction {
   id: string;
@@ -187,6 +189,9 @@ export default function EntradasSaidasPage() {
 
       if (error) throw error;
 
+      // Recalcular tudo e atualizar saldos
+      await recalcAll();
+
       toast({
         title: 'Sucesso',
         description: 'Transação excluída. Saldos recalculados.'
@@ -196,8 +201,8 @@ export default function EntradasSaidasPage() {
       setTransactionToDelete(null);
       loadTransactions();
 
-      // Trigger KPI refresh to recalculate balances
-      window.dispatchEvent(new Event('kpi-refresh'));
+      // Trigger global revalidation
+      revalidateAll();
     } catch (error) {
       console.error('Erro ao excluir transação:', error);
       toast({
