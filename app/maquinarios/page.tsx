@@ -3,307 +3,263 @@
 import { DashboardLayout } from '@/components/dashboard-layout';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Wrench, Plus, Trash2, FileText, CheckCircle, DollarSign } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Wrench, Plus, Calendar, DollarSign, CheckCircle, Undo2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
-import { revalidateAfterContratos, revalidateAfterFinancialOperation, revalidateAll } from '@/lib/revalidation-utils';
+import { format, differenceInDays, parse } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface Maquina {
   id: string;
+  item: string;
   nome: string;
-  custo_aquisicao: number;
   quantidade: number;
+  valor_unitario: number;
+  valor_total: number;
   valor_diaria: number;
   status: string;
-  observacao: string;
-}
-
-interface Obra {
-  id: string;
-  nome_obra: string;
-  cliente: string;
+  categoria: string;
 }
 
 interface Contrato {
   id: string;
-  numero_contrato: string;
   maquina_id: string;
-  obra_id: string;
+  maquina_nome: string;
+  maquina_item: string;
+  cliente: string;
+  obra: string;
   data_inicio: string;
   data_fim: string;
-  dias: number;
+  dias_locacao: number;
   valor_diaria: number;
   valor_total: number;
-  status: string;
+  valor_recebido: number;
   forma_pagamento: string;
+  status: string;
   recebido: boolean;
   data_recebimento: string;
-  maquinas: { nome: string };
-  obras: { nome_obra: string; cliente: string };
 }
 
 export default function MaquinariosPage() {
   const [maquinas, setMaquinas] = useState<Maquina[]>([]);
-  const [obras, setObras] = useState<Obra[]>([]);
   const [contratos, setContratos] = useState<Contrato[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [contratoDialogOpen, setContratoDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<any>(null);
+  const [simulationOpen, setSimulationOpen] = useState(false);
+  const [selectedMaquina, setSelectedMaquina] = useState<Maquina | null>(null);
   const { toast } = useToast();
 
-  const [formData, setFormData] = useState({
-    nome: '',
-    custo_aquisicao: 0,
-    quantidade: 1,
-    valor_diaria: 0,
-    observacao: ''
-  });
-
-  const [contratoForm, setContratoForm] = useState({
-    maquina_id: '',
-    obra_id: '',
-    data_inicio: format(new Date(), 'yyyy-MM-dd'),
-    dias: 1,
+  const [simulationForm, setSimulationForm] = useState({
+    cliente: '',
+    obra: '',
+    data_inicio: '',
+    data_fim: '',
+    dias: 0,
+    valor_total: 0,
     forma_pagamento: 'banco' as 'banco' | 'dinheiro'
   });
-
-  const [valorCalculado, setValorCalculado] = useState(0);
 
   useEffect(() => {
     loadData();
   }, []);
 
-  useEffect(() => {
-    calcularValorContrato();
-  }, [contratoForm.maquina_id, contratoForm.dias]);
-
   const loadData = async () => {
     try {
-      const [maquinasData, obrasData, contratosData] = await Promise.all([
-        supabase.from('maquinas').select('*').is('deleted_at', null).order('nome'),
-        supabase.from('obras').select('id, nome_obra, cliente').is('deleted_at', null).order('nome_obra'),
-        supabase.from('locacoes_contratos').select('*, maquinas(nome), obras(nome_obra, cliente)').is('deleted_at', null).order('created_at', { ascending: false })
+      setLoading(true);
+
+      const [maquinasRes, contratosRes] = await Promise.all([
+        supabase.from('maquinas').select('*').order('item'),
+        supabase.rpc('get_contratos_detalhados').then(res =>
+          supabase.from('contratos_locacao').select(`
+            id, maquina_id, cliente, obra, data_inicio, data_fim,
+            dias_locacao, valor_diaria, valor_total, valor_recebido,
+            forma_pagamento, status, recebido, data_recebimento
+          `).is('deleted_at', null).order('created_at', { ascending: false })
+        )
       ]);
 
-      if (maquinasData.data) setMaquinas(maquinasData.data);
-      if (obrasData.data) setObras(obrasData.data);
-      if (contratosData.data) setContratos(contratosData.data);
+      if (maquinasRes.data) setMaquinas(maquinasRes.data);
+      if (contratosRes.data) {
+        const contratosWithMaquinas = await Promise.all(
+          contratosRes.data.map(async (c: any) => {
+            const { data: maq } = await supabase
+              .from('maquinas')
+              .select('nome, item')
+              .eq('id', c.maquina_id)
+              .single();
+            return {
+              ...c,
+              maquina_nome: maq?.nome || 'N/A',
+              maquina_item: maq?.item || 'N/A'
+            };
+          })
+        );
+        setContratos(contratosWithMaquinas);
+      }
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      toast({ title: 'Erro', description: 'Não foi possível carregar os dados', variant: 'destructive' });
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível carregar os dados',
+        variant: 'destructive'
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const calcularValorContrato = () => {
-    const maquina = maquinas.find(m => m.id === contratoForm.maquina_id);
-    if (maquina && contratoForm.dias > 0) {
-      const valor = maquina.valor_diaria * contratoForm.dias;
-      setValorCalculado(valor);
-    } else {
-      setValorCalculado(0);
-    }
-  };
-
-  const handleSubmitMaquina = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!formData.nome) {
-      toast({ title: 'Erro', description: 'Nome é obrigatório', variant: 'destructive' });
-      return;
-    }
-
-    try {
-      const { error } = await supabase.from('maquinas').insert([{
-        nome: formData.nome,
-        custo_aquisicao: formData.custo_aquisicao || 0,
-        quantidade: formData.quantidade || 1,
-        valor_diaria: formData.valor_diaria || 0,
-        observacao: formData.observacao || '',
-        status: 'disponivel'
-      }]);
-
-      if (error) throw error;
-
-      toast({ title: 'Sucesso', description: 'Máquina cadastrada com sucesso!' });
-      setDialogOpen(false);
-      resetForm();
-      loadData();
-      revalidateAll();
-    } catch (error: any) {
-      console.error('Erro ao cadastrar máquina:', error);
-      toast({ title: 'Erro', description: error.message || 'Não foi possível cadastrar a máquina', variant: 'destructive' });
-    }
-  };
-
-  const handleConfirmarContrato = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!contratoForm.maquina_id || !contratoForm.obra_id || !contratoForm.data_inicio || contratoForm.dias <= 0) {
-      toast({ title: 'Erro', description: 'Preencha todos os campos obrigatórios', variant: 'destructive' });
-      return;
-    }
-
-    try {
-      const maquina = maquinas.find(m => m.id === contratoForm.maquina_id);
-      if (!maquina) throw new Error('Máquina não encontrada');
-
-      const dataInicio = new Date(contratoForm.data_inicio);
-      const dataFim = new Date(dataInicio);
-      dataFim.setDate(dataFim.getDate() + contratoForm.dias - 1);
-
-      const numeroContrato = `LC${format(new Date(), 'yyyy')}${String(contratos.length + 1).padStart(4, '0')}`;
-      const valorTotal = maquina.valor_diaria * contratoForm.dias;
-
-      const { error } = await supabase.from('locacoes_contratos').insert([{
-        numero_contrato: numeroContrato,
-        maquina_id: contratoForm.maquina_id,
-        obra_id: contratoForm.obra_id,
-        data_inicio: format(dataInicio, 'yyyy-MM-dd'),
-        data_fim: format(dataFim, 'yyyy-MM-dd'),
-        dias: contratoForm.dias,
-        valor_diaria: maquina.valor_diaria,
-        valor_total: valorTotal,
-        forma_pagamento: contratoForm.forma_pagamento,
-        status: 'ativo',
-        recebido: false
-      }]);
-
-      if (error) throw error;
-
-      await supabase.from('maquinas').update({ status: 'locado' }).eq('id', contratoForm.maquina_id);
-
-      toast({ title: 'Sucesso', description: 'Contrato confirmado e ativo!' });
-      setContratoDialogOpen(false);
-      resetContratoForm();
-      loadData();
-      revalidateAfterContratos();
-    } catch (error: any) {
-      console.error('Erro ao confirmar contrato:', error);
-      toast({ title: 'Erro', description: error.message || 'Não foi possível confirmar o contrato', variant: 'destructive' });
-    }
-  };
-
-  const handleMarcarRecebido = async (contrato: Contrato) => {
-    try {
-      const { data: bankAccount } = await supabase
-        .from('bank_accounts')
-        .select('id, saldo_atual')
-        .eq('nome', 'Itaú – Conta Principal')
-        .maybeSingle();
-
-      const { data: cashBook } = await supabase
-        .from('cash_books')
-        .select('id, saldo_atual')
-        .eq('nome', 'Caixa Dinheiro (Físico)')
-        .maybeSingle();
-
-      const { data: ledger, error: ledgerError } = await supabase
-        .from('cash_ledger')
-        .insert([{
-          data: format(new Date(), 'yyyy-MM-dd'),
-          tipo: 'entrada',
-          forma: contrato.forma_pagamento,
-          categoria: 'locacao_maquina',
-          descricao: `Recebimento Contrato ${contrato.numero_contrato} - ${contrato.maquinas?.nome}`,
-          valor: contrato.valor_total,
-          bank_account_id: contrato.forma_pagamento === 'banco' ? bankAccount?.id : null,
-          cash_book_id: contrato.forma_pagamento === 'dinheiro' ? cashBook?.id : null
-        }])
-        .select()
-        .single();
-
-      if (ledgerError) throw ledgerError;
-
-      const { error: contratoError } = await supabase
-        .from('locacoes_contratos')
-        .update({
-          recebido: true,
-          data_recebimento: format(new Date(), 'yyyy-MM-dd'),
-          cash_ledger_id: ledger.id
-        })
-        .eq('id', contrato.id);
-
-      if (contratoError) throw contratoError;
-
-      if (contrato.forma_pagamento === 'banco' && bankAccount) {
-        await supabase
-          .from('bank_accounts')
-          .update({ saldo_atual: (bankAccount.saldo_atual || 0) + contrato.valor_total })
-          .eq('id', bankAccount.id);
-      } else if (contrato.forma_pagamento === 'dinheiro' && cashBook) {
-        await supabase
-          .from('cash_books')
-          .update({ saldo_atual: (cashBook.saldo_atual || 0) + contrato.valor_total })
-          .eq('id', cashBook.id);
-      }
-
-      toast({ title: 'Sucesso', description: 'Pagamento registrado e saldo atualizado!' });
-      loadData();
-      revalidateAfterFinancialOperation();
-      revalidateAfterContratos();
-    } catch (error: any) {
-      console.error('Erro ao marcar como recebido:', error);
-      toast({ title: 'Erro', description: error.message || 'Não foi possível registrar o pagamento', variant: 'destructive' });
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!itemToDelete) return;
-
-    try {
-      const table = itemToDelete.tipo === 'maquina' ? 'maquinas' : 'locacoes_contratos';
-      const { error } = await supabase
-        .from(table)
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', itemToDelete.id);
-
-      if (error) throw error;
-
-      toast({ title: 'Sucesso', description: `${itemToDelete.tipo === 'maquina' ? 'Máquina' : 'Contrato'} excluído com sucesso!` });
-      setDeleteDialogOpen(false);
-      setItemToDelete(null);
-      loadData();
-      revalidateAll();
-    } catch (error: any) {
-      console.error('Erro ao excluir:', error);
-      toast({ title: 'Erro', description: 'Não foi possível excluir', variant: 'destructive' });
-    }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      nome: '',
-      custo_aquisicao: 0,
-      quantidade: 1,
-      valor_diaria: 0,
-      observacao: ''
-    });
-  };
-
-  const resetContratoForm = () => {
-    setContratoForm({
-      maquina_id: '',
-      obra_id: '',
-      data_inicio: format(new Date(), 'yyyy-MM-dd'),
-      dias: 1,
+  const openSimulation = (maquina: Maquina) => {
+    setSelectedMaquina(maquina);
+    setSimulationForm({
+      cliente: '',
+      obra: '',
+      data_inicio: '',
+      data_fim: '',
+      dias: 0,
+      valor_total: 0,
       forma_pagamento: 'banco'
     });
-    setValorCalculado(0);
+    setSimulationOpen(true);
+  };
+
+  const calculateSimulation = () => {
+    if (!simulationForm.data_inicio || !simulationForm.data_fim || !selectedMaquina) return;
+
+    const inicio = parse(simulationForm.data_inicio, 'yyyy-MM-dd', new Date());
+    const fim = parse(simulationForm.data_fim, 'yyyy-MM-dd', new Date());
+    const dias = differenceInDays(fim, inicio) + 1;
+    const valor_total = dias * selectedMaquina.valor_diaria;
+
+    setSimulationForm(prev => ({
+      ...prev,
+      dias,
+      valor_total
+    }));
+  };
+
+  useEffect(() => {
+    if (simulationForm.data_inicio && simulationForm.data_fim) {
+      calculateSimulation();
+    }
+  }, [simulationForm.data_inicio, simulationForm.data_fim]);
+
+  const confirmarContrato = async () => {
+    if (!selectedMaquina || !simulationForm.cliente || !simulationForm.data_inicio || !simulationForm.data_fim) {
+      toast({
+        title: 'Aviso',
+        description: 'Preencha todos os campos obrigatórios',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.rpc('create_contrato_locacao', {
+        p_maquina_id: selectedMaquina.id,
+        p_cliente: simulationForm.cliente,
+        p_obra: simulationForm.obra || null,
+        p_data_inicio: simulationForm.data_inicio,
+        p_data_fim: simulationForm.data_fim,
+        p_dias_locacao: simulationForm.dias,
+        p_valor_diaria: selectedMaquina.valor_diaria,
+        p_valor_total: simulationForm.valor_total,
+        p_forma_pagamento: simulationForm.forma_pagamento
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sucesso',
+        description: 'Contrato criado com sucesso. Máquina marcada como Locada.'
+      });
+
+      setSimulationOpen(false);
+      loadData();
+    } catch (error: any) {
+      console.error('Erro ao criar contrato:', error);
+      toast({
+        title: 'Erro',
+        description: error.message || 'Não foi possível criar o contrato',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const marcarRecebido = async (contratoId: string) => {
+    try {
+      const { error } = await supabase.rpc('receber_contrato_locacao', {
+        p_contrato_id: contratoId,
+        p_data_recebimento: new Date().toISOString().split('T')[0]
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sucesso',
+        description: 'Recebimento confirmado. Entrada criada no ledger e saldos atualizados.'
+      });
+
+      window.dispatchEvent(new Event('kpi-refresh'));
+      window.dispatchEvent(new Event('revalidate-all'));
+
+      loadData();
+    } catch (error: any) {
+      console.error('Erro ao marcar recebido:', error);
+      toast({
+        title: 'Erro',
+        description: error.message || 'Não foi possível confirmar o recebimento',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const desfazerRecebimento = async (contratoId: string) => {
+    try {
+      const { error } = await supabase.rpc('desfazer_recebimento_locacao', {
+        p_contrato_id: contratoId
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sucesso',
+        description: 'Recebimento desfeito. Entrada removida do ledger e saldos recalculados.'
+      });
+
+      window.dispatchEvent(new Event('kpi-refresh'));
+      window.dispatchEvent(new Event('revalidate-all'));
+
+      loadData();
+    } catch (error: any) {
+      console.error('Erro ao desfazer:', error);
+      toast({
+        title: 'Erro',
+        description: error.message || 'Não foi possível desfazer o recebimento',
+        variant: 'destructive'
+      });
+    }
   };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
+
+  const getStatusBadge = (status: string) => {
+    const badges: Record<string, { color: string; text: string }> = {
+      'Disponível': { color: 'bg-green-500/10 text-green-500 border-green-500/20', text: 'Disponível' },
+      'Locado': { color: 'bg-orange-500/10 text-orange-500 border-orange-500/20', text: 'Locado' },
+      'Manutenção': { color: 'bg-red-500/10 text-red-500 border-red-500/20', text: 'Manutenção' }
+    };
+
+    const badge = badges[status] || badges['Disponível'];
+    return (
+      <span className={`px-2 py-1 rounded-md text-xs font-medium border ${badge.color}`}>
+        {badge.text}
+      </span>
+    );
   };
 
   if (loading) {
@@ -319,395 +275,280 @@ export default function MaquinariosPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl text-[#FFD86F] mb-2" style={{ fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>
-            Maquinários
-          </h1>
-          <p className="text-muted" style={{ fontFamily: 'Inter, sans-serif' }}>
-            Gestão de máquinas e contratos de locação
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gold mb-2">Maquinário</h1>
+            <p className="text-muted">Gestão de equipamentos e contratos de locação</p>
+          </div>
         </div>
 
-        <Tabs defaultValue="maquinas" className="space-y-6">
-          <TabsList className="bg-surface border border-border">
-            <TabsTrigger value="maquinas" className="flex items-center gap-2">
-              <Wrench className="w-4 h-4" />
-              Cadastro de Máquinas
-            </TabsTrigger>
-            <TabsTrigger value="contratos" className="flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              Contratos de Locação
-            </TabsTrigger>
-          </TabsList>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {maquinas.map((maquina) => (
+            <Card key={maquina.id} className="card">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <CardTitle className="text-gold text-lg mb-2">{maquina.item}</CardTitle>
+                    <p className="text-sm text-muted">{maquina.categoria}</p>
+                  </div>
+                  <Wrench className="w-5 h-5 text-gold" />
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-muted">Quantidade</p>
+                    <p className="font-semibold text-white">{maquina.quantidade}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted">Valor Unit.</p>
+                    <p className="font-semibold text-white">{formatCurrency(maquina.valor_unitario)}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted">Valor Total</p>
+                    <p className="font-semibold text-gold">{formatCurrency(maquina.valor_total)}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted">Diária</p>
+                    <p className="font-semibold text-green-500">{formatCurrency(maquina.valor_diaria)}</p>
+                  </div>
+                </div>
 
-          <TabsContent value="maquinas">
-            <Card className="card p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-gold">Máquinas Cadastradas</h2>
-                <Dialog open={dialogOpen} onOpenChange={(open) => {
-                  setDialogOpen(open);
-                  if (!open) resetForm();
-                }}>
-                  <DialogTrigger asChild>
-                    <Button className="btn-primary">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Nova Máquina
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="bg-surface border-border">
-                    <DialogHeader>
-                      <DialogTitle className="text-gold">Cadastrar Máquina</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleSubmitMaquina} className="space-y-4">
-                      <div>
-                        <Label htmlFor="nome">Nome da Máquina *</Label>
-                        <Input
-                          id="nome"
-                          value={formData.nome}
-                          onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                          className="input-dark"
-                          required
-                        />
-                      </div>
+                <div className="pt-2 border-t border-border">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm text-muted">Status</span>
+                    {getStatusBadge(maquina.status)}
+                  </div>
 
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="custo_aquisicao">Custo de Aquisição</Label>
-                          <Input
-                            id="custo_aquisicao"
-                            type="number"
-                            step="0.01"
-                            value={formData.custo_aquisicao}
-                            onChange={(e) => setFormData({ ...formData, custo_aquisicao: parseFloat(e.target.value) || 0 })}
-                            className="input-dark"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="quantidade">Quantidade</Label>
-                          <Input
-                            id="quantidade"
-                            type="number"
-                            min="1"
-                            value={formData.quantidade}
-                            onChange={(e) => setFormData({ ...formData, quantidade: parseInt(e.target.value) || 1 })}
-                            className="input-dark"
-                          />
-                        </div>
-                      </div>
+                  <Button
+                    onClick={() => openSimulation(maquina)}
+                    disabled={maquina.status === 'Locado' || maquina.status === 'Manutenção'}
+                    className="w-full btn-primary"
+                  >
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Simular Locação
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
 
-                      <div>
-                        <Label htmlFor="valor_diaria">Valor da Diária *</Label>
-                        <Input
-                          id="valor_diaria"
-                          type="number"
-                          step="0.01"
-                          value={formData.valor_diaria}
-                          onChange={(e) => setFormData({ ...formData, valor_diaria: parseFloat(e.target.value) || 0 })}
-                          className="input-dark"
-                          required
-                        />
-                      </div>
-
-                      <div>
-                        <Label htmlFor="observacao">Observação</Label>
-                        <Input
-                          id="observacao"
-                          value={formData.observacao}
-                          onChange={(e) => setFormData({ ...formData, observacao: e.target.value })}
-                          className="input-dark"
-                        />
-                      </div>
-
-                      <div className="flex gap-3 pt-4">
-                        <Button type="submit" className="btn-primary flex-1">Cadastrar</Button>
-                        <Button type="button" onClick={() => setDialogOpen(false)} className="btn-secondary">
-                          Cancelar
-                        </Button>
-                      </div>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              </div>
-
+        <Card className="card">
+          <CardHeader>
+            <CardTitle className="text-gold">Contratos de Locação</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {contratos.length === 0 ? (
+              <p className="text-center text-muted py-8">Nenhum contrato registrado</p>
+            ) : (
               <div className="overflow-x-auto">
-                <table className="table-dark">
+                <table className="w-full text-sm">
                   <thead>
-                    <tr>
-                      <th>Nome</th>
-                      <th>Custo Aquisição</th>
-                      <th>Quantidade</th>
-                      <th>Valor Diária</th>
-                      <th>Status</th>
-                      <th>Ações</th>
+                    <tr className="border-b border-border">
+                      <th className="text-left p-3">Máquina</th>
+                      <th className="text-left p-3">Cliente</th>
+                      <th className="text-left p-3">Período</th>
+                      <th className="text-right p-3">Diárias</th>
+                      <th className="text-right p-3">Valor Total</th>
+                      <th className="text-center p-3">Status</th>
+                      <th className="text-center p-3">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {maquinas.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="text-center text-muted py-8">
-                          Nenhuma máquina cadastrada
+                    {contratos.map((contrato) => (
+                      <tr key={contrato.id} className="border-b border-border/50 hover:bg-accent/5">
+                        <td className="p-3">
+                          <div>
+                            <p className="font-medium text-white">{contrato.maquina_item}</p>
+                            {contrato.obra && (
+                              <p className="text-xs text-muted">{contrato.obra}</p>
+                            )}
+                          </div>
                         </td>
-                      </tr>
-                    ) : (
-                      maquinas.map((maquina) => (
-                        <tr key={maquina.id}>
-                          <td className="font-medium">{maquina.nome}</td>
-                          <td>{formatCurrency(maquina.custo_aquisicao || 0)}</td>
-                          <td>{maquina.quantidade || 1}</td>
-                          <td className="text-gold font-semibold">{formatCurrency(maquina.valor_diaria || 0)}</td>
-                          <td>
-                            <span className={`px-2 py-1 text-xs rounded-full ${
-                              maquina.status === 'locado'
-                                ? 'bg-warning/10 text-warning border border-warning/20'
-                                : 'bg-success/10 text-success border border-success/20'
-                            }`}>
-                              {maquina.status === 'locado' ? 'Locado' : 'Disponível'}
-                            </span>
-                          </td>
-                          <td>
+                        <td className="p-3 text-muted">{contrato.cliente}</td>
+                        <td className="p-3">
+                          <div className="text-xs">
+                            <p className="text-white">{format(new Date(contrato.data_inicio), 'dd/MM/yyyy')}</p>
+                            <p className="text-muted">até {format(new Date(contrato.data_fim), 'dd/MM/yyyy')}</p>
+                          </div>
+                        </td>
+                        <td className="p-3 text-right">
+                          <p className="text-white">{contrato.dias_locacao}</p>
+                          <p className="text-xs text-muted">{formatCurrency(contrato.valor_diaria)}/dia</p>
+                        </td>
+                        <td className="p-3 text-right font-semibold text-gold">
+                          {formatCurrency(contrato.valor_total)}
+                        </td>
+                        <td className="p-3 text-center">
+                          {contrato.recebido ? (
+                            <div className="text-xs">
+                              <span className="text-green-500 font-medium">✓ Recebido</span>
+                              {contrato.data_recebimento && (
+                                <p className="text-muted mt-1">
+                                  {format(new Date(contrato.data_recebimento), 'dd/MM/yyyy')}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-orange-500 text-xs">Pendente</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-center">
+                          {!contrato.recebido ? (
+                            <Button
+                              size="sm"
+                              onClick={() => marcarRecebido(contrato.id)}
+                              className="btn-primary text-xs"
+                            >
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Receber
+                            </Button>
+                          ) : (
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="text-danger hover:text-danger hover:bg-danger/10"
-                              onClick={() => {
-                                setItemToDelete({ ...maquina, tipo: 'maquina' });
-                                setDeleteDialogOpen(true);
-                              }}
+                              onClick={() => desfazerRecebimento(contrato.id)}
+                              className="text-xs hover:bg-orange-500/10"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Undo2 className="w-3 h-3 mr-1" />
+                              Desfazer
                             </Button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="contratos">
-            <Card className="card p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-gold">Contratos de Locação</h2>
-                <Dialog open={contratoDialogOpen} onOpenChange={(open) => {
-                  setContratoDialogOpen(open);
-                  if (!open) resetContratoForm();
-                }}>
-                  <DialogTrigger asChild>
-                    <Button className="btn-primary">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Novo Contrato
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="bg-surface border-border max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle className="text-gold">Novo Contrato de Locação</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleConfirmarContrato} className="space-y-4">
-                      <div>
-                        <Label htmlFor="maquina">Máquina *</Label>
-                        <select
-                          id="maquina"
-                          value={contratoForm.maquina_id}
-                          onChange={(e) => setContratoForm({ ...contratoForm, maquina_id: e.target.value })}
-                          className="select-dark w-full"
-                          required
-                        >
-                          <option value="">Selecione uma máquina</option>
-                          {maquinas.filter(m => m.status === 'disponivel').map((maquina) => (
-                            <option key={maquina.id} value={maquina.id}>
-                              {maquina.nome} - {formatCurrency(maquina.valor_diaria)}/dia
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <Label htmlFor="obra">Obra *</Label>
-                        <select
-                          id="obra"
-                          value={contratoForm.obra_id}
-                          onChange={(e) => setContratoForm({ ...contratoForm, obra_id: e.target.value })}
-                          className="select-dark w-full"
-                          required
-                        >
-                          <option value="">Selecione uma obra</option>
-                          {obras.map((obra) => (
-                            <option key={obra.id} value={obra.id}>
-                              {obra.nome_obra} - {obra.cliente}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="data_inicio">Data de Início *</Label>
-                          <Input
-                            id="data_inicio"
-                            type="date"
-                            value={contratoForm.data_inicio}
-                            onChange={(e) => setContratoForm({ ...contratoForm, data_inicio: e.target.value })}
-                            className="input-dark"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="dias">Tempo de Locação (dias) *</Label>
-                          <Input
-                            id="dias"
-                            type="number"
-                            min="1"
-                            value={contratoForm.dias}
-                            onChange={(e) => setContratoForm({ ...contratoForm, dias: parseInt(e.target.value) || 1 })}
-                            className="input-dark"
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <Label htmlFor="forma_pagamento">Forma de Pagamento *</Label>
-                        <select
-                          id="forma_pagamento"
-                          value={contratoForm.forma_pagamento}
-                          onChange={(e) => setContratoForm({ ...contratoForm, forma_pagamento: e.target.value as 'banco' | 'dinheiro' })}
-                          className="select-dark w-full"
-                          required
-                        >
-                          <option value="banco">Banco (Itaú)</option>
-                          <option value="dinheiro">Dinheiro (Físico)</option>
-                        </select>
-                      </div>
-
-                      <div className="p-4 bg-gold/10 border border-gold/20 rounded-lg">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-muted">Valor Total Calculado:</span>
-                          <span className="text-2xl font-bold text-gold">{formatCurrency(valorCalculado)}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-3 pt-4">
-                        <Button type="submit" className="btn-primary flex-1">
-                          <CheckCircle className="w-4 h-4 mr-2" />
-                          Confirmar Contrato
-                        </Button>
-                        <Button type="button" onClick={() => setContratoDialogOpen(false)} className="btn-secondary">
-                          Cancelar
-                        </Button>
-                      </div>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="table-dark">
-                  <thead>
-                    <tr>
-                      <th>Nº Contrato</th>
-                      <th>Máquina</th>
-                      <th>Obra</th>
-                      <th>Período</th>
-                      <th>Dias</th>
-                      <th>Valor Total</th>
-                      <th>Forma Pgto</th>
-                      <th>Status</th>
-                      <th>Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {contratos.length === 0 ? (
-                      <tr>
-                        <td colSpan={9} className="text-center text-muted py-8">
-                          Nenhum contrato registrado
+                          )}
                         </td>
                       </tr>
-                    ) : (
-                      contratos.map((contrato) => (
-                        <tr key={contrato.id}>
-                          <td className="font-mono text-sm">{contrato.numero_contrato}</td>
-                          <td className="font-medium">{contrato.maquinas?.nome}</td>
-                          <td>{contrato.obras?.nome_obra}</td>
-                          <td className="text-sm">
-                            {format(new Date(contrato.data_inicio), 'dd/MM/yy')} - {format(new Date(contrato.data_fim), 'dd/MM/yy')}
-                          </td>
-                          <td>{contrato.dias}</td>
-                          <td className="text-gold font-semibold">{formatCurrency(contrato.valor_total)}</td>
-                          <td>
-                            <span className={`px-2 py-1 text-xs rounded-full ${
-                              contrato.forma_pagamento === 'banco'
-                                ? 'bg-info/10 text-info border border-info/20'
-                                : 'bg-success/10 text-success border border-success/20'
-                            }`}>
-                              {contrato.forma_pagamento === 'banco' ? 'Banco' : 'Dinheiro'}
-                            </span>
-                          </td>
-                          <td>
-                            {contrato.recebido ? (
-                              <span className="px-2 py-1 text-xs rounded-full bg-success/10 text-success border border-success/20">
-                                Recebido
-                              </span>
-                            ) : (
-                              <span className="px-2 py-1 text-xs rounded-full bg-warning/10 text-warning border border-warning/20">
-                                Ativo
-                              </span>
-                            )}
-                          </td>
-                          <td>
-                            <div className="flex gap-2">
-                              {!contrato.recebido && (
-                                <Button
-                                  size="sm"
-                                  className="btn-primary"
-                                  onClick={() => handleMarcarRecebido(contrato)}
-                                >
-                                  <DollarSign className="w-4 h-4 mr-1" />
-                                  Recebido
-                                </Button>
-                              )}
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-danger hover:text-danger hover:bg-danger/10"
-                                onClick={() => {
-                                  setItemToDelete({ ...contrato, tipo: 'contrato' });
-                                  setDeleteDialogOpen(true);
-                                }}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
+                    ))}
                   </tbody>
                 </table>
               </div>
-            </Card>
-          </TabsContent>
-        </Tabs>
-
-        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <AlertDialogContent className="bg-surface border-border">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="text-gold">Confirmar Exclusão</AlertDialogTitle>
-              <AlertDialogDescription className="text-muted">
-                Tem certeza que deseja excluir este {itemToDelete?.tipo === 'maquina' ? 'máquina' : 'contrato'}?
-                Esta ação não pode ser desfeita.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel className="btn-secondary">Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDelete} className="btn-danger bg-danger hover:bg-danger/80">
-                Excluir
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+            )}
+          </CardContent>
+        </Card>
       </div>
+
+      <Dialog open={simulationOpen} onOpenChange={setSimulationOpen}>
+        <DialogContent className="bg-surface border-border max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-gold text-xl">
+              Simular Locação - {selectedMaquina?.item}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="bg-gold/10 border border-gold/20 rounded-lg p-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-muted">Equipamento</p>
+                  <p className="font-semibold text-white">{selectedMaquina?.item}</p>
+                </div>
+                <div>
+                  <p className="text-muted">Valor da Diária</p>
+                  <p className="font-semibold text-gold">
+                    {selectedMaquina && formatCurrency(selectedMaquina.valor_diaria)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Cliente *</Label>
+                <Input
+                  value={simulationForm.cliente}
+                  onChange={(e) => setSimulationForm({ ...simulationForm, cliente: e.target.value })}
+                  placeholder="Nome do cliente"
+                  className="input-dark"
+                />
+              </div>
+              <div>
+                <Label>Obra (opcional)</Label>
+                <Input
+                  value={simulationForm.obra}
+                  onChange={(e) => setSimulationForm({ ...simulationForm, obra: e.target.value })}
+                  placeholder="Nome da obra"
+                  className="input-dark"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Data Início *</Label>
+                <Input
+                  type="date"
+                  value={simulationForm.data_inicio}
+                  onChange={(e) => setSimulationForm({ ...simulationForm, data_inicio: e.target.value })}
+                  className="input-dark"
+                />
+              </div>
+              <div>
+                <Label>Data Fim *</Label>
+                <Input
+                  type="date"
+                  value={simulationForm.data_fim}
+                  onChange={(e) => setSimulationForm({ ...simulationForm, data_fim: e.target.value })}
+                  min={simulationForm.data_inicio}
+                  className="input-dark"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label>Forma de Pagamento</Label>
+              <select
+                value={simulationForm.forma_pagamento}
+                onChange={(e) => setSimulationForm({ ...simulationForm, forma_pagamento: e.target.value as any })}
+                className="select-dark w-full"
+              >
+                <option value="banco">Banco (Itaú)</option>
+                <option value="dinheiro">Dinheiro (Físico)</option>
+              </select>
+            </div>
+
+            {simulationForm.dias > 0 && (
+              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-green-500">Simulação</span>
+                  <DollarSign className="w-5 h-5 text-green-500" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-muted mb-1">Total de Diárias</p>
+                    <p className="text-2xl font-bold text-white">{simulationForm.dias}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted mb-1">Valor Total</p>
+                    <p className="text-2xl font-bold text-gold">
+                      {formatCurrency(simulationForm.valor_total)}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-muted mt-3">
+                  {simulationForm.dias} diárias × {selectedMaquina && formatCurrency(selectedMaquina.valor_diaria)}
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-4">
+              <Button
+                onClick={confirmarContrato}
+                disabled={!simulationForm.cliente || !simulationForm.data_inicio || !simulationForm.data_fim}
+                className="btn-primary flex-1"
+              >
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Confirmar Contrato
+              </Button>
+              <Button
+                type="button"
+                onClick={() => setSimulationOpen(false)}
+                className="btn-secondary"
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
