@@ -24,24 +24,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    // Timeout de segurança para não travar a aplicação
-    const timeout = setTimeout(() => {
-      console.warn('Auth session timeout - proceeding without auth');
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      checkAdmin(session?.user?.email);
       setLoading(false);
-    }, 5000);
-
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
-        clearTimeout(timeout);
-        setUser(session?.user ?? null);
-        checkAdmin(session?.user?.email);
-        setLoading(false);
-      })
-      .catch((error) => {
-        clearTimeout(timeout);
-        console.error('Error getting session:', error);
-        setLoading(false);
-      });
+    });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
@@ -49,10 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
-    return () => {
-      clearTimeout(timeout);
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const checkAdmin = async (email?: string) => {
