@@ -7,7 +7,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true,
+    detectSessionInUrl: false,
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-  }
+    flowType: 'pkce',
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'dashboard-aguia',
+    },
+  },
 });
