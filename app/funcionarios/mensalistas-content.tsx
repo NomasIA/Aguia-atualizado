@@ -16,6 +16,7 @@ import { revalidateAfterFolha, revalidateAll } from '@/lib/revalidation-utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { getPaymentDate, formatPaymentDateInfo } from '@/lib/business-days';
 import { DecimoTerceiroModal } from './decimo-terceiro-modal';
+import { ValeRefeicaoCalculator } from '@/components/vale-refeicao-calculator';
 
 interface Mensalista {
   id: string;
@@ -23,10 +24,12 @@ interface Mensalista {
   funcao: string;
   salario_base: number;
   ajuda_custo: number;
-  vale_salario: number;
   recebe_vt: boolean;
   vt_valor_unitario_dia: number;
   vt_dias_uteis_override: number;
+  vale_refeicao_valor_dia?: number;
+  vale_refeicao_dias_mes?: number;
+  vale_refeicao_total_calculado?: number;
   ativo: boolean;
 }
 
@@ -70,10 +73,12 @@ export default function MensalistasContent() {
     funcao: '',
     salario_base: '',
     ajuda_custo: '0',
-    vale_salario: '0',
     recebe_vt: false,
     vt_valor_unitario_dia: '0',
-    vt_dias_uteis_override: '22'
+    vt_dias_uteis_override: '22',
+    vale_refeicao_valor_dia: '0',
+    vale_refeicao_dias_mes: '22',
+    vale_refeicao_total_calculado: '0'
   });
 
   const [competencia, setCompetencia] = useState(() => {
@@ -135,9 +140,9 @@ export default function MensalistasContent() {
   const calcularCustoTotal = (mensalista: Mensalista) => {
     const salario = parseFloat(mensalista.salario_base?.toString() || '0');
     const ajuda = parseFloat(mensalista.ajuda_custo?.toString() || '0');
-    const vale = parseFloat(mensalista.vale_salario?.toString() || '0');
     const vt = calcularVTMensal(mensalista);
-    return salario + ajuda + vale + vt;
+    const vr = parseFloat(mensalista.vale_refeicao_total_calculado?.toString() || '0');
+    return salario + ajuda + vt + vr;
   };
 
   const getDataPagamento = async (tipo: TipoPagamento): Promise<Date> => {
@@ -176,9 +181,10 @@ export default function MensalistasContent() {
 
       if (tipo === 'SALARIO_5') {
         valor = parseFloat(m.salario_base?.toString() || '0') +
-                parseFloat(m.ajuda_custo?.toString() || '0');
+                parseFloat(m.ajuda_custo?.toString() || '0') +
+                parseFloat(m.vale_refeicao_total_calculado?.toString() || '0');
       } else if (tipo === 'VALE_20') {
-        valor = parseFloat(m.vale_salario?.toString() || '0');
+        valor = 0;
       } else if (tipo === 'VT_ULTIMO_DIA') {
         if (m.recebe_vt) {
           valor = calcularVTMensal(m);
@@ -353,10 +359,12 @@ export default function MensalistasContent() {
       funcao: '',
       salario_base: '',
       ajuda_custo: '0',
-      vale_salario: '0',
       recebe_vt: false,
       vt_valor_unitario_dia: '0',
-      vt_dias_uteis_override: '22'
+      vt_dias_uteis_override: '22',
+      vale_refeicao_valor_dia: '0',
+      vale_refeicao_dias_mes: '22',
+      vale_refeicao_total_calculado: '0'
     });
     setEditingMensalista(null);
     setCadastroDialogOpen(true);
@@ -368,10 +376,12 @@ export default function MensalistasContent() {
       funcao: mensalista.funcao,
       salario_base: mensalista.salario_base.toString(),
       ajuda_custo: mensalista.ajuda_custo.toString(),
-      vale_salario: mensalista.vale_salario.toString(),
       recebe_vt: mensalista.recebe_vt,
       vt_valor_unitario_dia: mensalista.vt_valor_unitario_dia.toString(),
-      vt_dias_uteis_override: mensalista.vt_dias_uteis_override.toString()
+      vt_dias_uteis_override: mensalista.vt_dias_uteis_override.toString(),
+      vale_refeicao_valor_dia: (mensalista.vale_refeicao_valor_dia || 0).toString(),
+      vale_refeicao_dias_mes: (mensalista.vale_refeicao_dias_mes || 22).toString(),
+      vale_refeicao_total_calculado: (mensalista.vale_refeicao_total_calculado || 0).toString()
     });
     setEditingMensalista(mensalista);
     setCadastroDialogOpen(true);
@@ -395,14 +405,16 @@ export default function MensalistasContent() {
         funcao: formData.funcao,
         salario_base: parseFloat(formData.salario_base),
         ajuda_custo: parseFloat(formData.ajuda_custo || '0'),
-        vale_salario: parseFloat(formData.vale_salario || '0'),
         recebe_vt: formData.recebe_vt,
         vt_valor_unitario_dia: parseFloat(formData.vt_valor_unitario_dia || '0'),
         vt_dias_uteis_override: parseInt(formData.vt_dias_uteis_override || '22'),
+        vale_refeicao_valor_dia: parseFloat(formData.vale_refeicao_valor_dia || '0'),
+        vale_refeicao_dias_mes: parseInt(formData.vale_refeicao_dias_mes || '22'),
+        vale_refeicao_total_calculado: parseFloat(formData.vale_refeicao_total_calculado || '0'),
         tipo_vinculo: 'CLT',
         ativo: true,
         aplica_encargos: false,
-        usa_adiantamento: formData.vale_salario !== '0'
+        usa_adiantamento: false
       };
 
       if (editingMensalista) {
@@ -612,8 +624,8 @@ export default function MensalistasContent() {
                 <th className="text-left">Cargo</th>
                 <th className="text-right">Salário</th>
                 <th className="text-right">Ajuda Custo</th>
-                <th className="text-right">Vale</th>
                 <th className="text-right">VT Mensal</th>
+                <th className="text-right">VR Mensal</th>
                 <th className="text-right">Total</th>
                 <th className="text-center">Ações</th>
               </tr>
@@ -636,8 +648,8 @@ export default function MensalistasContent() {
                       <td className="text-muted">{mensalista.funcao}</td>
                       <td className="text-right">{formatCurrency(parseFloat(mensalista.salario_base?.toString() || '0'))}</td>
                       <td className="text-right">{formatCurrency(parseFloat(mensalista.ajuda_custo?.toString() || '0'))}</td>
-                      <td className="text-right">{formatCurrency(parseFloat(mensalista.vale_salario?.toString() || '0'))}</td>
                       <td className="text-right">{formatCurrency(vtMensal)}</td>
+                      <td className="text-right">{formatCurrency(parseFloat(mensalista.vale_refeicao_total_calculado?.toString() || '0'))}</td>
                       <td className="text-right font-semibold text-gold">{formatCurrency(custoTotal)}</td>
                       <td>
                         <div className="flex items-center justify-center gap-2">
@@ -674,10 +686,10 @@ export default function MensalistasContent() {
                   {formatCurrency(mensalistas.reduce((sum, m) => sum + parseFloat(m.ajuda_custo?.toString() || '0'), 0))}
                 </td>
                 <td className="text-right font-semibold">
-                  {formatCurrency(mensalistas.reduce((sum, m) => sum + parseFloat(m.vale_salario?.toString() || '0'), 0))}
+                  {formatCurrency(mensalistas.reduce((sum, m) => sum + calcularVTMensal(m), 0))}
                 </td>
                 <td className="text-right font-semibold">
-                  {formatCurrency(mensalistas.reduce((sum, m) => sum + calcularVTMensal(m), 0))}
+                  {formatCurrency(mensalistas.reduce((sum, m) => sum + parseFloat(m.vale_refeicao_total_calculado?.toString() || '0'), 0))}
                 </td>
                 <td className="text-right font-bold text-gold text-lg">
                   {formatCurrency(mensalistas.reduce((sum, m) => sum + calcularCustoTotal(m), 0))}
@@ -920,65 +932,104 @@ export default function MensalistasContent() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="vale_salario" className="text-gold">Vale-Salário</Label>
-                <Input
-                  id="vale_salario"
-                  type="number"
-                  step="0.01"
-                  value={formData.vale_salario}
-                  onChange={(e) => setFormData({ ...formData, vale_salario: e.target.value })}
-                  placeholder="0.00"
-                  className="input-dark"
-                />
-                <p className="text-xs text-muted">Adiantamento quinzenal (dia 20)</p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="vt_dias_uteis" className="text-gold">Dias Úteis/Mês</Label>
-                <Input
-                  id="vt_dias_uteis"
-                  type="number"
-                  value={formData.vt_dias_uteis_override}
-                  onChange={(e) => setFormData({ ...formData, vt_dias_uteis_override: e.target.value })}
-                  placeholder="22"
-                  className="input-dark"
-                />
-              </div>
             </div>
 
-            <div className="border-t border-border pt-4">
-              <div className="flex items-center justify-between mb-4">
-                <div className="space-y-1">
-                  <Label className="text-gold">Recebe Vale-Transporte</Label>
-                  <p className="text-xs text-muted">Funcionário utiliza transporte público</p>
+            <div className="border-t border-border pt-4 space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gold mb-4">Vale Transporte (VT)</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="space-y-1">
+                    <Label className="text-gold">Funcionário recebe VT</Label>
+                    <p className="text-xs text-muted">Ative se o funcionário utiliza transporte público</p>
+                  </div>
+                  <Switch
+                    checked={formData.recebe_vt}
+                    onCheckedChange={(checked) => setFormData({ ...formData, recebe_vt: checked })}
+                  />
                 </div>
-                <Switch
-                  checked={formData.recebe_vt}
-                  onCheckedChange={(checked) => setFormData({ ...formData, recebe_vt: checked })}
-                />
+
+                {formData.recebe_vt && (
+                  <div className="grid grid-cols-2 gap-4 p-4 bg-surface/50 rounded-lg border border-gold/20">
+                    <div className="space-y-2">
+                      <Label htmlFor="vt_valor_unitario" className="text-gold">Valor Diário do VT (R$)</Label>
+                      <Input
+                        id="vt_valor_unitario"
+                        type="number"
+                        step="0.01"
+                        value={formData.vt_valor_unitario_dia}
+                        onChange={(e) => setFormData({ ...formData, vt_valor_unitario_dia: e.target.value })}
+                        placeholder="Ex: 5.00"
+                        className="input-dark"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="vt_dias_uteis" className="text-gold">Dias Úteis/Mês</Label>
+                      <Input
+                        id="vt_dias_uteis"
+                        type="number"
+                        value={formData.vt_dias_uteis_override}
+                        onChange={(e) => setFormData({ ...formData, vt_dias_uteis_override: e.target.value })}
+                        placeholder="22"
+                        className="input-dark"
+                      />
+                    </div>
+                    <div className="col-span-2 pt-2 border-t border-gold/20">
+                      <p className="text-sm text-muted">VT Mensal calculado: <span className="font-semibold text-white">{formatCurrency(
+                        parseFloat(formData.vt_valor_unitario_dia || '0') *
+                        parseInt(formData.vt_dias_uteis_override || '22')
+                      )}</span></p>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {formData.recebe_vt && (
-                <div className="space-y-2 pl-4 border-l-2 border-gold/20">
-                  <Label htmlFor="vt_valor_unitario" className="text-gold">Valor Unitário do VT</Label>
-                  <Input
-                    id="vt_valor_unitario"
-                    type="number"
-                    step="0.01"
-                    value={formData.vt_valor_unitario_dia}
-                    onChange={(e) => setFormData({ ...formData, vt_valor_unitario_dia: e.target.value })}
-                    placeholder="0.00"
-                    className="input-dark"
-                  />
-                  <p className="text-xs text-muted">
-                    VT Mensal calculado: {formatCurrency(
-                      parseFloat(formData.vt_valor_unitario_dia || '0') *
-                      parseInt(formData.vt_dias_uteis_override || '22')
-                    )}
-                  </p>
+              <div>
+                <h3 className="text-lg font-semibold text-gold mb-4">Vale Refeição (VR)</h3>
+                <div className="grid grid-cols-2 gap-4 p-4 bg-surface/50 rounded-lg border border-gold/20">
+                  <div className="space-y-2">
+                    <Label htmlFor="vr_valor_dia" className="text-gold">Valor Diário de VR (R$)</Label>
+                    <Input
+                      id="vr_valor_dia"
+                      type="number"
+                      step="0.01"
+                      value={formData.vale_refeicao_valor_dia}
+                      onChange={(e) => {
+                        const newValor = e.target.value;
+                        const total = parseFloat(newValor || '0') * parseInt(formData.vale_refeicao_dias_mes || '22');
+                        setFormData({
+                          ...formData,
+                          vale_refeicao_valor_dia: newValor,
+                          vale_refeicao_total_calculado: total.toString()
+                        });
+                      }}
+                      placeholder="Ex: 35.00"
+                      className="input-dark"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="vr_dias_mes" className="text-gold">Dias de VR no Mês</Label>
+                    <Input
+                      id="vr_dias_mes"
+                      type="number"
+                      value={formData.vale_refeicao_dias_mes}
+                      onChange={(e) => {
+                        const newDias = e.target.value;
+                        const total = parseFloat(formData.vale_refeicao_valor_dia || '0') * parseInt(newDias || '22');
+                        setFormData({
+                          ...formData,
+                          vale_refeicao_dias_mes: newDias,
+                          vale_refeicao_total_calculado: total.toString()
+                        });
+                      }}
+                      placeholder="22"
+                      className="input-dark"
+                    />
+                  </div>
+                  <div className="col-span-2 pt-2 border-t border-gold/20">
+                    <p className="text-sm text-muted">VR Mensal calculado: <span className="font-semibold text-white">{formatCurrency(parseFloat(formData.vale_refeicao_total_calculado || '0'))}</span></p>
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
 
             <div className="bg-gold/10 border border-gold/20 rounded-lg p-3">
@@ -993,10 +1044,6 @@ export default function MensalistasContent() {
                   <span className="text-white">{formatCurrency(parseFloat(formData.ajuda_custo || '0'))}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted">Vale-Salário:</span>
-                  <span className="text-white">{formatCurrency(parseFloat(formData.vale_salario || '0'))}</span>
-                </div>
-                <div className="flex justify-between">
                   <span className="text-muted">VT Mensal:</span>
                   <span className="text-white">
                     {formatCurrency(
@@ -1006,16 +1053,20 @@ export default function MensalistasContent() {
                     )}
                   </span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="text-muted">VR Mensal:</span>
+                  <span className="text-white">{formatCurrency(parseFloat(formData.vale_refeicao_total_calculado || '0'))}</span>
+                </div>
                 <div className="flex justify-between border-t border-gold/20 pt-1 mt-1">
                   <span className="font-semibold text-gold">Total:</span>
                   <span className="font-bold text-gold">
                     {formatCurrency(
                       parseFloat(formData.salario_base || '0') +
                       parseFloat(formData.ajuda_custo || '0') +
-                      parseFloat(formData.vale_salario || '0') +
                       (formData.recebe_vt
                         ? parseFloat(formData.vt_valor_unitario_dia || '0') * parseInt(formData.vt_dias_uteis_override || '22')
-                        : 0)
+                        : 0) +
+                      parseFloat(formData.vale_refeicao_total_calculado || '0')
                     )}
                   </span>
                 </div>
