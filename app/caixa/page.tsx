@@ -51,6 +51,7 @@ export default function CaixaPage() {
         supabase
           .from('cash_ledger')
           .select('*')
+          .is('deleted_at', null) // Filtrar apenas transações ativas
           .order('data', { ascending: false })
           .limit(50),
       ]);
