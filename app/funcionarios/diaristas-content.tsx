@@ -55,10 +55,11 @@ export default function DiaristasContent() {
     try {
       const { data, error } = await supabase
         .from('diaristas')
-        .select('*')
+        .select('id, nome, funcao, valor_diaria, valor_diaria_semana, valor_diaria_fimsemana, ativo')
         .order('nome');
 
       if (error) throw error;
+      console.log('Diaristas carregados:', data);
       setDiaristas(data || []);
     } catch (error) {
       console.error('Erro ao carregar diaristas:', error);
@@ -252,6 +253,12 @@ export default function DiaristasContent() {
         let diasSemana = 0;
         let diasFimSemana = 0;
 
+        console.log(`Processando pagamento para ${diarista.nome}:`, {
+          valor_diaria: diarista.valor_diaria,
+          valor_diaria_semana: diarista.valor_diaria_semana,
+          valor_diaria_fimsemana: diarista.valor_diaria_fimsemana
+        });
+
         Object.entries(pontosDiarista.dias).forEach(([data, presente]) => {
           if (presente) {
             const dia = parseISO(data);
@@ -259,15 +266,21 @@ export default function DiaristasContent() {
 
             if (diaSemana === 0 || diaSemana === 6) {
               // Domingo (0) ou Sábado (6)
+              const valorDia = diarista.valor_diaria_fimsemana || diarista.valor_diaria;
+              console.log(`  Fim de semana ${data}: R$ ${valorDia}`);
               diasFimSemana++;
-              valorTotal += diarista.valor_diaria_fimsemana || diarista.valor_diaria;
+              valorTotal += valorDia;
             } else {
               // Segunda a sexta
+              const valorDia = diarista.valor_diaria_semana || diarista.valor_diaria;
+              console.log(`  Dia de semana ${data}: R$ ${valorDia}`);
               diasSemana++;
-              valorTotal += diarista.valor_diaria_semana || diarista.valor_diaria;
+              valorTotal += valorDia;
             }
           }
         });
+
+        console.log(`Total calculado: R$ ${valorTotal} (${diasSemana} dias semana + ${diasFimSemana} fim de semana)`);
 
         const { error: lancError } = await supabase
           .from('diarista_lancamentos')
