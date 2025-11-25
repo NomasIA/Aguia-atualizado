@@ -749,8 +749,25 @@ export default function DiaristasContent() {
     diaristas.filter(d => d.ativo).forEach(diarista => {
       const pontoDiarista = pontos[diarista.id];
       if (pontoDiarista) {
-        const dias = Object.values(pontoDiarista.dias).filter(p => p).length;
-        total += dias * diarista.valor_diaria;
+        // Calcular usando os valores salvos nos pontos
+        Object.entries(pontoDiarista.dias).forEach(([data, presente]) => {
+          if (presente) {
+            const valorSalvo = pontoDiarista.valores?.[data];
+            if (valorSalvo && valorSalvo > 0) {
+              // Usar valor salvo no ponto
+              total += Number(valorSalvo);
+            } else {
+              // Fallback: calcular baseado no dia da semana
+              const dia = parseISO(data);
+              const diaSemana = dia.getDay();
+              if (diaSemana === 0 || diaSemana === 6) {
+                total += Number(diarista.valor_diaria_fimsemana || diarista.valor_diaria);
+              } else {
+                total += Number(diarista.valor_diaria_semana || diarista.valor_diaria);
+              }
+            }
+          }
+        });
       }
     });
     return total;
@@ -1049,9 +1066,29 @@ Pedro Costa;3
                   </thead>
                   <tbody>
                     {diaristas.filter(d => d.ativo).map((diarista) => {
-                      const pontoDiarista = pontos[diarista.id] || { dias: {} };
+                      const pontoDiarista = pontos[diarista.id] || { dias: {}, valores: {} };
                       const diasTrabalhados = Object.values(pontoDiarista.dias).filter(p => p).length;
-                      const valorTotal = diasTrabalhados * diarista.valor_diaria;
+
+                      // Calcular valor total usando os valores salvos nos pontos
+                      let valorTotal = 0;
+                      Object.entries(pontoDiarista.dias).forEach(([data, presente]) => {
+                        if (presente) {
+                          const valorSalvo = pontoDiarista.valores?.[data];
+                          if (valorSalvo && valorSalvo > 0) {
+                            // Usar valor salvo no ponto
+                            valorTotal += Number(valorSalvo);
+                          } else {
+                            // Fallback: calcular baseado no dia da semana
+                            const dia = parseISO(data);
+                            const diaSemana = dia.getDay();
+                            if (diaSemana === 0 || diaSemana === 6) {
+                              valorTotal += Number(diarista.valor_diaria_fimsemana || diarista.valor_diaria);
+                            } else {
+                              valorTotal += Number(diarista.valor_diaria_semana || diarista.valor_diaria);
+                            }
+                          }
+                        }
+                      });
 
                       return (
                         <tr key={diarista.id}>
