@@ -1,13 +1,24 @@
+/**
+ * Supabase Client Configuration
+ *
+ * Centralized Supabase client for use across the application
+ * Works in both client and server components
+ */
+
 import { createClient } from '@supabase/supabase-js';
+import { env } from './env';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://kwzzaqcysxvlrlgyqucp.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt3enphcWN5c3h2bHJsZ3lxdWNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjExNTExNjksImV4cCI6MjA3NjcyNzE2OX0.NgSIKyrHeKjXQnrHMQ6R3juC__4SWEVODOkkQskzXzo';
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+export const supabase = createClient(
+  env.NEXT_PUBLIC_SUPABASE_URL,
+  env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    },
   }
-});
+);
+
+export default supabase;

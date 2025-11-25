@@ -16,9 +16,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { formatCurrency, formatDate } from '@/lib/format-utils';
-import { Edit, Eye, Link as LinkIcon, Plus, Trash2, Unlink } from 'lucide-react';
+import { Edit, Eye, Link as LinkIcon, Plus, Trash2, Unlink, AlertCircle } from 'lucide-react';
 import { EditModeProvider, useEditMode } from '@/lib/edit-mode-context';
 import { StatusBadge } from '@/components/status-badge';
+import { isConciliacaoEnabled } from '@/lib/feature-flags';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface Extrato {
   id: string;
@@ -48,11 +50,19 @@ function ConciliacaoContent() {
   const [transacaoTipo, setTransacaoTipo] = useState<'entrada' | 'saida'>('entrada');
   const [stats, setStats] = useState({ total: 0, conciliados: 0, naoConciliados: 0, percentualConciliado: '0' });
 
+  // Check if conciliation feature is enabled
+  const conciliacaoEnabled = isConciliacaoEnabled();
+
   useEffect(() => {
     loadData();
   }, []);
 
   async function loadData() {
+    if (!conciliacaoEnabled) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       // Load extratos
@@ -198,6 +208,22 @@ function ConciliacaoContent() {
       return 'Conciliado';
     }
     return 'Não conciliado';
+  }
+
+  if (!conciliacaoEnabled) {
+    return (
+      <DashboardLayout>
+        <div className="container mx-auto p-6">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Funcionalidade Desabilitada</AlertTitle>
+            <AlertDescription>
+              A conciliação bancária está desabilitada. Para habilitar, configure ENABLE_CONCILIACAO=true no arquivo .env
+            </AlertDescription>
+          </Alert>
+        </div>
+      </DashboardLayout>
+    );
   }
 
   if (loading) {

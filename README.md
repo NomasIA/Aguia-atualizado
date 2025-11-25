@@ -45,6 +45,91 @@ npm run build
 npm start
 ```
 
+## ⚙️ Configuração de Variáveis de Ambiente
+
+### Obrigatórias
+
+#### `NEXT_PUBLIC_SUPABASE_URL`
+URL do seu projeto Supabase.
+
+**Como obter:**
+1. Acesse seu projeto no [Supabase Dashboard](https://supabase.com/dashboard)
+2. Vá em **Project Settings** > **API**
+3. Copie o valor de **Project URL**
+
+**Exemplo:**
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
+```
+
+#### `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+Chave anônima/pública do Supabase (seguro para expor no cliente).
+
+**Como obter:**
+1. Acesse seu projeto no [Supabase Dashboard](https://supabase.com/dashboard)
+2. Vá em **Project Settings** > **API**
+3. Copie o valor de **anon public key**
+
+**Exemplo:**
+```env
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### Opcionais
+
+#### `ENABLE_CONCILIACAO`
+Habilita ou desabilita funcionalidades de conciliação bancária.
+
+**Valores:** `true` | `false`
+**Padrão:** `true`
+
+Quando `false`:
+- Esconde tela de conciliação
+- Desabilita endpoints de extratos bancários
+- Exibe mensagem informativa para usuários
+
+**Exemplo:**
+```env
+ENABLE_CONCILIACAO=true
+```
+
+#### `ADMIN_EMAILS`
+Lista de emails com privilégios administrativos (separados por vírgula).
+
+**Exemplo:**
+```env
+ADMIN_EMAILS=admin@empresa.com,gerente@empresa.com
+```
+
+### Exemplo Completo
+
+Copie e edite o arquivo `.env.example`:
+
+```env
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-chave-anon-aqui
+
+# Feature Flags
+ENABLE_CONCILIACAO=true
+
+# Admin Configuration
+ADMIN_EMAILS=admin@empresa.com
+```
+
+### Validação de Variáveis
+
+O projeto usa **Zod** para validar variáveis de ambiente na inicialização:
+- ✅ Verifica presença de variáveis obrigatórias
+- ✅ Valida formatos (URLs, emails, etc.)
+- ✅ Aplica valores padrão para opcionais
+- ❌ Impede inicialização com configuração inválida
+
+Se houver erro de configuração, você verá no console:
+```
+❌ Invalid environment variables: {...}
+```
+
 ## 🔒 Segurança e RLS (Row Level Security)
 
 ### Ambiente Atual (Interno)
