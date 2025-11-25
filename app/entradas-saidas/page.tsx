@@ -33,6 +33,7 @@ export default function EntradasSaidasPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [showDeleted, setShowDeleted] = useState(false);
   const { toast } = useToast();
 
@@ -128,17 +129,35 @@ export default function EntradasSaidasPage() {
         cash_book_id: formData.forma === 'dinheiro' ? cashBook?.id : null,
       };
 
-      const { error } = await supabase.from('cash_ledger').insert([transaction]);
+      if (editingTransaction) {
+        // Update existing transaction
+        const { error } = await supabase
+          .from('cash_ledger')
+          .update(transaction)
+          .eq('id', editingTransaction.id);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      toast({ title: 'Sucesso', description: 'Transação registrada com sucesso' });
+        // Recalcular saldos após edição
+        await recalcAll();
+
+        toast({ title: 'Sucesso', description: 'Transação atualizada com sucesso' });
+      } else {
+        // Insert new transaction
+        const { error } = await supabase.from('cash_ledger').insert([transaction]);
+
+        if (error) throw error;
+
+        toast({ title: 'Sucesso', description: 'Transação registrada com sucesso' });
+      }
+
       setDialogOpen(false);
+      setEditingTransaction(null);
       resetForm();
       loadTransactions();
 
-      // Trigger KPI refresh
-      window.dispatchEvent(new Event('kpi-refresh'));
+      // Trigger global revalidation
+      revalidateAll();
     } catch (error) {
       console.error('Erro ao salvar transação:', error);
       toast({ title: 'Erro', description: 'Não foi possível registrar a transação', variant: 'destructive' });
@@ -155,6 +174,21 @@ export default function EntradasSaidasPage() {
       valor: 0,
       observacao: '',
     });
+    setEditingTransaction(null);
+  };
+
+  const handleEdit = (transaction: Transaction) => {
+    setEditingTransaction(transaction);
+    setFormData({
+      data: transaction.data,
+      tipo: transaction.tipo,
+      forma: transaction.forma,
+      categoria: transaction.categoria,
+      descricao: transaction.descricao,
+      valor: transaction.valor,
+      observacao: transaction.observacao || '',
+    });
+    setDialogOpen(true);
   };
 
   const exportToCSV = () => {
@@ -290,7 +324,9 @@ export default function EntradasSaidasPage() {
               </DialogTrigger>
               <DialogContent className="bg-surface border-border max-w-2xl">
                 <DialogHeader>
-                  <DialogTitle className="text-gold">Nova Transação</DialogTitle>
+                  <DialogTitle className="text-gold">
+                    {editingTransaction ? 'Editar Transação' : 'Nova Transação'}
+                  </DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
@@ -373,7 +409,9 @@ export default function EntradasSaidasPage() {
                   </div>
 
                   <div className="flex gap-3 pt-4">
-                    <Button type="submit" className="btn-primary flex-1">Registrar</Button>
+                    <Button type="submit" className="btn-primary flex-1">
+                      {editingTransaction ? 'Atualizar' : 'Registrar'}
+                    </Button>
                     <Button type="button" onClick={() => setDialogOpen(false)} className="btn-secondary">
                       Cancelar
                     </Button>
@@ -542,6 +580,14 @@ export default function EntradasSaidasPage() {
                           </span>
                         ) : (
                           <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-gold hover:text-gold hover:bg-gold/10"
+                              onClick={() => handleEdit(transaction)}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
                             <Button
                               size="sm"
                               variant="ghost"
