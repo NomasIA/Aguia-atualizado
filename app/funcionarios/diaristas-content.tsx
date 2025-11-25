@@ -279,34 +279,46 @@ export default function DiaristasContent() {
         let diasSemana = 0;
         let diasFimSemana = 0;
 
-        console.log(`Processando pagamento para ${diarista.nome}:`, {
+        console.log(`\n${'='.repeat(60)}`);
+        console.log(`Processando pagamento para: ${diarista.nome}`);
+        console.log(`${'='.repeat(60)}`);
+        console.log('Valores do diarista:', {
           valor_diaria: diarista.valor_diaria,
           valor_diaria_semana: diarista.valor_diaria_semana,
           valor_diaria_fimsemana: diarista.valor_diaria_fimsemana
         });
+        console.log('\nDias trabalhados:');
 
         Object.entries(pontosDiarista.dias).forEach(([data, presente]) => {
           if (presente) {
             const dia = parseISO(data);
             const diaSemana = dia.getDay();
+            const nomeDiaSemana = ['Domingo', 'Segunda', 'Ter\u00e7a', 'Quarta', 'Quinta', 'Sexta', 'S\u00e1bado'][diaSemana];
 
             if (diaSemana === 0 || diaSemana === 6) {
               // Domingo (0) ou Sábado (6)
-              const valorDia = diarista.valor_diaria_fimsemana || diarista.valor_diaria;
-              console.log(`  Fim de semana ${data}: R$ ${valorDia}`);
+              const valorDia = Number(diarista.valor_diaria_fimsemana || diarista.valor_diaria);
+              console.log(`  \u{1F4C5} ${data} (${nomeDiaSemana}) - FIM DE SEMANA: R$ ${valorDia.toFixed(2)}`);
               diasFimSemana++;
               valorTotal += valorDia;
+              console.log(`     Subtotal acumulado: R$ ${valorTotal.toFixed(2)}`);
             } else {
               // Segunda a sexta
-              const valorDia = diarista.valor_diaria_semana || diarista.valor_diaria;
-              console.log(`  Dia de semana ${data}: R$ ${valorDia}`);
+              const valorDia = Number(diarista.valor_diaria_semana || diarista.valor_diaria);
+              console.log(`  \u{1F4C5} ${data} (${nomeDiaSemana}) - Dia de semana: R$ ${valorDia.toFixed(2)}`);
               diasSemana++;
               valorTotal += valorDia;
+              console.log(`     Subtotal acumulado: R$ ${valorTotal.toFixed(2)}`);
             }
           }
         });
 
-        console.log(`Total calculado: R$ ${valorTotal} (${diasSemana} dias semana + ${diasFimSemana} fim de semana)`);
+        console.log(`\n${'='.repeat(60)}`);
+        console.log(`RESUMO DO PAGAMENTO:`);
+        console.log(`  Dias de semana: ${diasSemana} dias`);
+        console.log(`  Fins de semana: ${diasFimSemana} dias`);
+        console.log(`  VALOR TOTAL: R$ ${valorTotal.toFixed(2)}`);
+        console.log(`${'='.repeat(60)}\n`);
 
         const { error: lancError } = await supabase
           .from('diarista_lancamentos')
