@@ -210,7 +210,7 @@ export default function EntradasSaidasPage() {
   const exportToCSV = () => {
     const headers = ['Data', 'Tipo', 'Forma', 'Categoria', 'Descrição', 'Valor'];
     const rows = filteredTransactions.map(t => [
-      format(new Date(t.data), 'dd/MM/yyyy'),
+      format(new Date(t.data + 'T00:00:00'), 'dd/MM/yyyy'),
       t.tipo.toUpperCase(),
       t.forma === 'banco' ? 'Banco (Itaú)' : 'Dinheiro (Físico)',
       t.categoria,
@@ -565,7 +565,7 @@ export default function EntradasSaidasPage() {
                 ) : (
                   filteredTransactions.map((transaction) => (
                     <tr key={transaction.id} className={transaction.deleted_at ? 'opacity-50' : ''}>
-                      <td>{format(new Date(transaction.data), 'dd/MM/yyyy')}</td>
+                      <td>{format(new Date(transaction.data + 'T00:00:00'), 'dd/MM/yyyy')}</td>
                       <td>
                         {transaction.tipo === 'entrada' ? (
                           <span className="text-xs px-2 py-1 bg-success/10 text-success rounded-full">
@@ -634,7 +634,7 @@ export default function EntradasSaidasPage() {
                 Tem certeza que deseja excluir esta transação? Esta ação irá atualizar os saldos de Banco e Caixa imediatamente.
                 {transactionToDelete && (
                   <div className="mt-4 p-3 bg-black/30 rounded border border-border">
-                    <p><strong>Data:</strong> {format(new Date(transactionToDelete.data), 'dd/MM/yyyy')}</p>
+                    <p><strong>Data:</strong> {format(new Date(transactionToDelete.data + 'T00:00:00'), 'dd/MM/yyyy')}</p>
                     <p><strong>Descrição:</strong> {transactionToDelete.descricao}</p>
                     <p><strong>Valor:</strong> {formatCurrency(transactionToDelete.valor)}</p>
                   </div>
