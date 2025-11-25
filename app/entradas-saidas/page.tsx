@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Download, Filter, TrendingUp, TrendingDown, Trash2, Edit, Eye, EyeOff, Upload } from 'lucide-react';
+import { Plus, Download, Filter, TrendingUp, TrendingDown, Trash2, Edit, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { recalcAll, createLedgerEntry } from '@/lib/ledger-sync';
@@ -35,8 +35,6 @@ export default function EntradasSaidasPage() {
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [showDeleted, setShowDeleted] = useState(false);
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [importing, setImporting] = useState(false);
   const { toast } = useToast();
 
   const [filters, setFilters] = useState({
@@ -269,125 +267,6 @@ export default function EntradasSaidasPage() {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
-  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setImporting(true);
-
-    try {
-      const XLSX = await import('xlsx');
-      const reader = new FileReader();
-
-      reader.onload = async (e) => {
-        try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const sheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[sheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-          console.log('Dados importados:', jsonData);
-
-          const { data: bankAccount } = await supabase
-            .from('bank_accounts')
-            .select('id')
-            .eq('nome', 'Itaú – Conta Principal')
-            .maybeSingle();
-
-          let importedCount = 0;
-          let skippedCount = 0;
-
-          for (const row of jsonData as any[]) {
-            const data = row['Data'] || row['data'] || row['DATE'];
-            const descricao = row['Descrição'] || row['Descricao'] || row['descricao'] || row['Historico'] || row['historico'] || row['DESCRIPTION'];
-            const valorStr = String(row['Valor'] || row['valor'] || row['VALUE'] || '0').replace(/\./g, '').replace(',', '.');
-            const valor = parseFloat(valorStr);
-
-            if (!data || !descricao || isNaN(valor)) {
-              skippedCount++;
-              continue;
-            }
-
-            const dateFormatted = typeof data === 'string'
-              ? data.split('/').reverse().join('-')
-              : new Date(data).toISOString().split('T')[0];
-
-            const tipo = valor >= 0 ? 'entrada' : 'saida';
-            const valorAbs = Math.abs(valor);
-
-            const hash = `${dateFormatted}-${descricao.trim()}-${valorAbs.toFixed(2)}-${Date.now()}-${Math.random()}`;
-
-            const { data: existing } = await supabase
-              .from('extratos_importados')
-              .select('id')
-              .eq('data', dateFormatted)
-              .eq('historico', descricao.trim())
-              .eq('valor', valorAbs)
-              .maybeSingle();
-
-            if (existing) {
-              skippedCount++;
-              continue;
-            }
-
-            await supabase.from('extratos_importados').insert({
-              conta_id: 'itau-principal',
-              data: dateFormatted,
-              historico: descricao.trim(),
-              valor: valorAbs,
-              hash_unico: hash,
-              source: 'manual_upload',
-            });
-
-            await supabase.from('cash_ledger').insert({
-              data: dateFormatted,
-              tipo: tipo,
-              forma: 'banco',
-              categoria: 'Importação Automática',
-              descricao: descricao.trim(),
-              valor: valorAbs,
-              bank_account_id: bankAccount?.id,
-              observacao: 'Importado do extrato bancário',
-            });
-
-            importedCount++;
-          }
-
-          await recalcAll();
-
-          toast({
-            title: 'Importação concluída',
-            description: `${importedCount} transações importadas, ${skippedCount} duplicadas ignoradas.`,
-          });
-
-          setImportDialogOpen(false);
-          loadTransactions();
-          revalidateAll();
-        } catch (error) {
-          console.error('Erro ao processar arquivo:', error);
-          toast({
-            title: 'Erro',
-            description: 'Não foi possível processar o arquivo',
-            variant: 'destructive',
-          });
-        } finally {
-          setImporting(false);
-        }
-      };
-
-      reader.readAsArrayBuffer(file);
-    } catch (error) {
-      console.error('Erro ao importar arquivo:', error);
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível importar o arquivo',
-        variant: 'destructive',
-      });
-      setImporting(false);
-    }
-  };
-
   const getSubtotals = () => {
     const entradas = filteredTransactions
       .filter(t => t.tipo === 'entrada')
@@ -449,58 +328,6 @@ export default function EntradasSaidasPage() {
               <Download className="w-4 h-4 mr-2" />
               Exportar CSV
             </Button>
-            <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="btn-secondary">
-                  <Upload className="w-4 h-4 mr-2" />
-                  Importar Extrato
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-surface border-border">
-                <DialogHeader>
-                  <DialogTitle className="text-gold">Importar Extrato Bancário</DialogTitle>
-                  <DialogDescription className="text-muted">
-                    Faça upload de um arquivo Excel ou CSV com as transações do banco.
-                    O arquivo deve conter as colunas: Data, Descrição e Valor.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
-                    <Input
-                      type="file"
-                      accept=".xlsx,.xls,.csv"
-                      onChange={handleImportFile}
-                      disabled={importing}
-                      className="hidden"
-                      id="file-upload"
-                    />
-                    <label
-                      htmlFor="file-upload"
-                      className="cursor-pointer flex flex-col items-center"
-                    >
-                      <Upload className="w-12 h-12 text-gold mb-4" />
-                      <p className="text-sm font-medium mb-1">
-                        {importing ? 'Importando...' : 'Clique para selecionar arquivo'}
-                      </p>
-                      <p className="text-xs text-muted">
-                        Formatos aceitos: Excel (.xlsx, .xls) ou CSV
-                      </p>
-                    </label>
-                  </div>
-                  <div className="bg-black/30 rounded p-4 text-sm text-muted space-y-2">
-                    <p className="font-medium text-gold">Formato esperado do arquivo:</p>
-                    <ul className="list-disc list-inside space-y-1">
-                      <li><strong>Data:</strong> Formato DD/MM/AAAA ou AAAA-MM-DD</li>
-                      <li><strong>Descrição:</strong> Texto descritivo da transação</li>
-                      <li><strong>Valor:</strong> Número positivo para entrada, negativo para saída</li>
-                    </ul>
-                    <p className="mt-3 text-xs">
-                      ℹ️ Transações duplicadas serão automaticamente ignoradas
-                    </p>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
             <Dialog open={dialogOpen} onOpenChange={(open) => {
               setDialogOpen(open);
               if (!open) resetForm();
