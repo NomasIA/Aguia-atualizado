@@ -182,6 +182,28 @@ export default function DiaristasContent() {
 
   const togglePonto = async (diaristaId: string, data: string, presente: boolean) => {
     try {
+      // Buscar o diarista para obter os valores de diária
+      const diarista = diaristas.find(d => d.id === diaristaId);
+      if (!diarista) {
+        console.error('Diarista não encontrado');
+        return;
+      }
+
+      // Determinar o valor da diária baseado no dia da semana
+      const dia = parseISO(data);
+      const diaSemana = dia.getDay();
+
+      let valorDiaria: number;
+      if (diaSemana === 0 || diaSemana === 6) {
+        // Domingo (0) ou Sábado (6)
+        valorDiaria = diarista.valor_diaria_fimsemana || diarista.valor_diaria;
+        console.log(`Ponto fim de semana ${data}: R$ ${valorDiaria}`);
+      } else {
+        // Segunda a sexta
+        valorDiaria = diarista.valor_diaria_semana || diarista.valor_diaria;
+        console.log(`Ponto dia de semana ${data}: R$ ${valorDiaria}`);
+      }
+
       const { data: existing } = await supabase
         .from('diarista_ponto')
         .select('id')
@@ -192,7 +214,10 @@ export default function DiaristasContent() {
       if (existing) {
         const { error } = await supabase
           .from('diarista_ponto')
-          .update({ presente })
+          .update({
+            presente,
+            valor_diaria: valorDiaria
+          })
           .eq('id', existing.id);
 
         if (error) throw error;
@@ -203,6 +228,7 @@ export default function DiaristasContent() {
             diarista_id: diaristaId,
             data,
             presente,
+            valor_diaria: valorDiaria,
           }]);
 
         if (error) throw error;
