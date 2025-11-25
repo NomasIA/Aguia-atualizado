@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { DollarSign, Banknote, Bus, Check, AlertCircle, Undo2, Plus, Edit, Trash2, Gift } from 'lucide-react';
+import { DollarSign, Banknote, Bus, Check, AlertCircle, Undo2, Plus, Edit, Trash2, Gift, UtensilsCrossed } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -43,7 +43,7 @@ interface PayrollRun {
   ledger_id: string;
 }
 
-type TipoPagamento = 'SALARIO_5' | 'VALE_20' | 'VT_ULTIMO_DIA';
+type TipoPagamento = 'SALARIO_5' | 'VALE_20' | 'VT_ULTIMO_DIA' | 'VR_DIA_5';
 
 interface ModalData {
   tipo: TipoPagamento;
@@ -151,6 +151,8 @@ export default function MensalistasContent() {
     let day = 5;
     if (tipo === 'VALE_20') {
       day = 20;
+    } else if (tipo === 'VR_DIA_5') {
+      day = 5;
     }
 
     const adjustedDate = await getPaymentDate(
@@ -168,6 +170,7 @@ export default function MensalistasContent() {
       case 'SALARIO_5': return 'Salário (dia 5)';
       case 'VALE_20': return 'Vale-Salário (dia 20)';
       case 'VT_ULTIMO_DIA': return 'Vale-Transporte (último dia útil)';
+      case 'VR_DIA_5': return 'Vale Refeição (dia 5)';
     }
   };
 
@@ -181,8 +184,38 @@ export default function MensalistasContent() {
 
       if (tipo === 'SALARIO_5') {
         valor = parseFloat(m.salario_base?.toString() || '0') +
-                parseFloat(m.ajuda_custo?.toString() || '0') +
-                parseFloat(m.vale_refeicao_total_calculado?.toString() || '0');
+                parseFloat(m.ajuda_custo?.toString() || '0');
+      } else if (tipo === 'VALE_20') {
+        valor = 0;
+      } else if (tipo === 'VT_ULTIMO_DIA') {
+        if (m.recebe_vt) {
+          valor = calcularVTMensal(m);
+        }
+      } else if (tipo === 'VR_DIA_5') {
+        valor = parseFloat(m.vale_refeicao_total_calculado?.toString() || '0');
+      }
+
+      if (valor > 0) {
+        detalhes.push({ nome: m.nome, valor });
+        total += valor;
+        count++;
+      }
+    });
+
+    return { detalhes, total, count };
+  };
+
+  const calcularTotaisPorTipoOld = (tipo: TipoPagamento) => {
+    const detalhes: Array<{ nome: string; valor: number }> = [];
+    let total = 0;
+    let count = 0;
+
+    mensalistas.forEach((m) => {
+      let valor = 0;
+
+      if (tipo === 'SALARIO_5') {
+        valor = parseFloat(m.salario_base?.toString() || '0') +
+                parseFloat(m.ajuda_custo?.toString() || '0');
       } else if (tipo === 'VALE_20') {
         valor = 0;
       } else if (tipo === 'VT_ULTIMO_DIA') {
@@ -251,7 +284,8 @@ export default function MensalistasContent() {
 
       const descricao = `Folha Mensalistas • ${getTipoLabel(modalData.tipo)} • ${competencia}`;
       const categoria = modalData.tipo === 'SALARIO_5' ? 'salario' :
-                       modalData.tipo === 'VALE_20' ? 'vale_salario' : 'vt';
+                       modalData.tipo === 'VALE_20' ? 'vale_salario' :
+                       modalData.tipo === 'VT_ULTIMO_DIA' ? 'vt' : 'vale_refeicao';
 
       const ledger = await createLedgerEntry({
         data: format(dataPagamento, 'yyyy-MM-dd'),
@@ -525,7 +559,7 @@ export default function MensalistasContent() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <Button
             size="lg"
             className={isProcessado('SALARIO_5') ? 'btn-success' : 'btn-primary'}
@@ -579,6 +613,25 @@ export default function MensalistasContent() {
               <>
                 <Bus className="w-5 h-5 mr-2" />
                 🚎 Pagar VT (último dia útil)
+              </>
+            )}
+          </Button>
+
+          <Button
+            size="lg"
+            className={isProcessado('VR_DIA_5') ? 'btn-success' : 'btn-primary'}
+            onClick={() => abrirModalConfirmacao('VR_DIA_5')}
+            disabled={isProcessado('VR_DIA_5')}
+          >
+            {isProcessado('VR_DIA_5') ? (
+              <>
+                <Check className="w-5 h-5 mr-2" />
+                VR Pago ✅
+              </>
+            ) : (
+              <>
+                <UtensilsCrossed className="w-5 h-5 mr-2" />
+                🍴 Pagar VR (dia 5)
               </>
             )}
           </Button>

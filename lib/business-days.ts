@@ -87,7 +87,7 @@ export async function getPaymentDate(
   year: number,
   month: number,
   day: number,
-  type: 'SALARIO_5' | 'VALE_20' | 'VT_ULTIMO_DIA'
+  type: 'SALARIO_5' | 'VALE_20' | 'VT_ULTIMO_DIA' | 'VR_DIA_5'
 ): Promise<Date> {
   let originalDate: Date;
 

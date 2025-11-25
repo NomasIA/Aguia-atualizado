@@ -17,6 +17,8 @@ interface Diarista {
   nome: string;
   funcao: string;
   valor_diaria: number;
+  valor_diaria_semana?: number;
+  valor_diaria_fimsemana?: number;
   ativo: boolean;
 }
 
@@ -39,6 +41,8 @@ export default function DiaristasContent() {
     nome: '',
     funcao: 'Ajudante',
     valor_diaria: 0,
+    valor_diaria_semana: 0,
+    valor_diaria_fimsemana: 0,
     ativo: true,
   });
 
@@ -142,6 +146,8 @@ export default function DiaristasContent() {
       nome: diarista.nome,
       funcao: diarista.funcao,
       valor_diaria: diarista.valor_diaria,
+      valor_diaria_semana: diarista.valor_diaria_semana || 0,
+      valor_diaria_fimsemana: diarista.valor_diaria_fimsemana || 0,
       ativo: diarista.ativo,
     });
     setDialogOpen(true);
@@ -626,6 +632,8 @@ export default function DiaristasContent() {
       nome: '',
       funcao: 'Ajudante',
       valor_diaria: 0,
+      valor_diaria_semana: 0,
+      valor_diaria_fimsemana: 0,
       ativo: true,
     });
   };
@@ -706,7 +714,7 @@ export default function DiaristasContent() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-2">Valor da Diária</label>
+                  <label className="block text-sm font-medium mb-2">Valor da Diária (padrão)</label>
                   <Input
                     type="number"
                     step="0.01"
@@ -715,6 +723,31 @@ export default function DiaristasContent() {
                     className="input-dark"
                     required
                   />
+                  <p className="text-xs text-muted mt-1">Valor padrão para compatibilidade</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gold">Diária Semana (Seg-Sex)</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={formData.valor_diaria_semana}
+                      onChange={(e) => setFormData({ ...formData, valor_diaria_semana: parseFloat(e.target.value) || 0 })}
+                      className="input-dark"
+                      placeholder="Ex: 150.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gold">Diária Final de Semana</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={formData.valor_diaria_fimsemana}
+                      onChange={(e) => setFormData({ ...formData, valor_diaria_fimsemana: parseFloat(e.target.value) || 0 })}
+                      className="input-dark"
+                      placeholder="Ex: 200.00"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="flex items-center gap-2">
