@@ -301,9 +301,10 @@ export default function EntradasSaidasPage() {
           for (const row of jsonData as any[]) {
             const data = row['Data'] || row['data'] || row['DATE'];
             const descricao = row['Descrição'] || row['Descricao'] || row['descricao'] || row['Historico'] || row['historico'] || row['DESCRIPTION'];
-            const valor = parseFloat(String(row['Valor'] || row['valor'] || row['VALUE'] || '0').replace(',', '.'));
+            const valorStr = String(row['Valor'] || row['valor'] || row['VALUE'] || '0').replace(/\./g, '').replace(',', '.');
+            const valor = parseFloat(valorStr);
 
-            if (!data || !descricao || !valor) {
+            if (!data || !descricao || isNaN(valor)) {
               skippedCount++;
               continue;
             }
@@ -315,12 +316,14 @@ export default function EntradasSaidasPage() {
             const tipo = valor >= 0 ? 'entrada' : 'saida';
             const valorAbs = Math.abs(valor);
 
-            const hash = `${dateFormatted}-${descricao}-${valorAbs}`;
+            const hash = `${dateFormatted}-${descricao.trim()}-${valorAbs.toFixed(2)}-${Date.now()}-${Math.random()}`;
 
             const { data: existing } = await supabase
               .from('extratos_importados')
               .select('id')
-              .eq('hash_unico', hash)
+              .eq('data', dateFormatted)
+              .eq('historico', descricao.trim())
+              .eq('valor', valorAbs)
               .maybeSingle();
 
             if (existing) {
@@ -331,7 +334,7 @@ export default function EntradasSaidasPage() {
             await supabase.from('extratos_importados').insert({
               conta_id: 'itau-principal',
               data: dateFormatted,
-              historico: descricao,
+              historico: descricao.trim(),
               valor: valorAbs,
               hash_unico: hash,
               source: 'manual_upload',
@@ -342,7 +345,7 @@ export default function EntradasSaidasPage() {
               tipo: tipo,
               forma: 'banco',
               categoria: 'Importação Automática',
-              descricao: descricao,
+              descricao: descricao.trim(),
               valor: valorAbs,
               bank_account_id: bankAccount?.id,
               observacao: 'Importado do extrato bancário',
