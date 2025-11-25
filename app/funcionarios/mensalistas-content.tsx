@@ -43,7 +43,7 @@ interface PayrollRun {
   ledger_id: string;
 }
 
-type TipoPagamento = 'SALARIO_5' | 'VALE_20' | 'VT_ULTIMO_DIA' | 'VR_DIA_5';
+type TipoPagamento = 'SALARIO_5' | 'VALE_20' | 'VT_ULTIMO_DIA' | 'VR_ULTIMO_DIA';
 
 interface ModalData {
   tipo: TipoPagamento;
@@ -151,8 +151,6 @@ export default function MensalistasContent() {
     let day = 5;
     if (tipo === 'VALE_20') {
       day = 20;
-    } else if (tipo === 'VR_DIA_5') {
-      day = 5;
     }
 
     const adjustedDate = await getPaymentDate(
@@ -170,7 +168,7 @@ export default function MensalistasContent() {
       case 'SALARIO_5': return 'Salário (dia 5)';
       case 'VALE_20': return 'Vale-Salário (dia 20)';
       case 'VT_ULTIMO_DIA': return 'Vale-Transporte (último dia útil)';
-      case 'VR_DIA_5': return 'Vale Refeição (dia 5)';
+      case 'VR_ULTIMO_DIA': return 'Vale Refeição (último dia útil)';
     }
   };
 
@@ -191,7 +189,7 @@ export default function MensalistasContent() {
         if (m.recebe_vt) {
           valor = calcularVTMensal(m);
         }
-      } else if (tipo === 'VR_DIA_5') {
+      } else if (tipo === 'VR_ULTIMO_DIA') {
         valor = parseFloat(m.vale_refeicao_total_calculado?.toString() || '0');
       }
 
@@ -619,11 +617,11 @@ export default function MensalistasContent() {
 
           <Button
             size="lg"
-            className={isProcessado('VR_DIA_5') ? 'btn-success' : 'btn-primary'}
-            onClick={() => abrirModalConfirmacao('VR_DIA_5')}
-            disabled={isProcessado('VR_DIA_5')}
+            className={isProcessado('VR_ULTIMO_DIA') ? 'btn-success' : 'btn-primary'}
+            onClick={() => abrirModalConfirmacao('VR_ULTIMO_DIA')}
+            disabled={isProcessado('VR_ULTIMO_DIA')}
           >
-            {isProcessado('VR_DIA_5') ? (
+            {isProcessado('VR_ULTIMO_DIA') ? (
               <>
                 <Check className="w-5 h-5 mr-2" />
                 VR Pago ✅
@@ -631,7 +629,7 @@ export default function MensalistasContent() {
             ) : (
               <>
                 <UtensilsCrossed className="w-5 h-5 mr-2" />
-                🍴 Pagar VR (dia 5)
+                🍴 Pagar VR (último dia útil)
               </>
             )}
           </Button>

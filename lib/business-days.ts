@@ -87,11 +87,11 @@ export async function getPaymentDate(
   year: number,
   month: number,
   day: number,
-  type: 'SALARIO_5' | 'VALE_20' | 'VT_ULTIMO_DIA' | 'VR_DIA_5'
+  type: 'SALARIO_5' | 'VALE_20' | 'VT_ULTIMO_DIA' | 'VR_ULTIMO_DIA'
 ): Promise<Date> {
   let originalDate: Date;
 
-  if (type === 'VT_ULTIMO_DIA') {
+  if (type === 'VT_ULTIMO_DIA' || type === 'VR_ULTIMO_DIA') {
     const lastDay = new Date(year, month, 0);
     originalDate = lastDay;
   } else {
