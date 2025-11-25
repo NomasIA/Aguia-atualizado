@@ -25,6 +25,7 @@ interface Diarista {
 interface PontoSemanal {
   diarista_id: string;
   dias: { [key: string]: boolean };
+  valores: { [key: string]: number };
 }
 
 export default function DiaristasContent() {
@@ -81,6 +82,8 @@ export default function DiaristasContent() {
 
       if (error) throw error;
 
+      console.log('Pontos carregados do banco:', data);
+
       const pontosMap: { [key: string]: PontoSemanal } = {};
 
       data?.forEach((ponto) => {
@@ -88,11 +91,15 @@ export default function DiaristasContent() {
           pontosMap[ponto.diarista_id] = {
             diarista_id: ponto.diarista_id,
             dias: {},
+            valores: {},
           };
         }
         pontosMap[ponto.diarista_id].dias[ponto.data] = ponto.presente;
+        // Armazenar o valor da diária que foi usado quando o ponto foi marcado
+        pontosMap[ponto.diarista_id].valores[ponto.data] = ponto.valor_diaria || 0;
       });
 
+      console.log('Pontos mapeados:', pontosMap);
       setPontos(pontosMap);
     } catch (error) {
       console.error('Erro ao carregar ponto:', error);
@@ -295,21 +302,33 @@ export default function DiaristasContent() {
             const diaSemana = dia.getDay();
             const nomeDiaSemana = ['Domingo', 'Segunda', 'Ter\u00e7a', 'Quarta', 'Quinta', 'Sexta', 'S\u00e1bado'][diaSemana];
 
-            if (diaSemana === 0 || diaSemana === 6) {
-              // Domingo (0) ou Sábado (6)
-              const valorDia = Number(diarista.valor_diaria_fimsemana || diarista.valor_diaria);
-              console.log(`  \u{1F4C5} ${data} (${nomeDiaSemana}) - FIM DE SEMANA: R$ ${valorDia.toFixed(2)}`);
-              diasFimSemana++;
-              valorTotal += valorDia;
-              console.log(`     Subtotal acumulado: R$ ${valorTotal.toFixed(2)}`);
+            // Usar o valor que foi salvo no banco quando o ponto foi marcado
+            const valorSalvo = pontosDiarista.valores?.[data];
+            let valorDia: number;
+
+            if (valorSalvo && valorSalvo > 0) {
+              // Usar valor salvo no ponto
+              valorDia = Number(valorSalvo);
+              console.log(`  \u{1F4C5} ${data} (${nomeDiaSemana}) - Valor salvo no ponto: R$ ${valorDia.toFixed(2)}`);
             } else {
-              // Segunda a sexta
-              const valorDia = Number(diarista.valor_diaria_semana || diarista.valor_diaria);
-              console.log(`  \u{1F4C5} ${data} (${nomeDiaSemana}) - Dia de semana: R$ ${valorDia.toFixed(2)}`);
-              diasSemana++;
-              valorTotal += valorDia;
-              console.log(`     Subtotal acumulado: R$ ${valorTotal.toFixed(2)}`);
+              // Fallback: calcular baseado no dia da semana (para pontos antigos sem valor)
+              if (diaSemana === 0 || diaSemana === 6) {
+                valorDia = Number(diarista.valor_diaria_fimsemana || diarista.valor_diaria);
+                console.log(`  \u{1F4C5} ${data} (${nomeDiaSemana}) - FIM DE SEMANA (calculado): R$ ${valorDia.toFixed(2)}`);
+              } else {
+                valorDia = Number(diarista.valor_diaria_semana || diarista.valor_diaria);
+                console.log(`  \u{1F4C5} ${data} (${nomeDiaSemana}) - Dia de semana (calculado): R$ ${valorDia.toFixed(2)}`);
+              }
             }
+
+            if (diaSemana === 0 || diaSemana === 6) {
+              diasFimSemana++;
+            } else {
+              diasSemana++;
+            }
+
+            valorTotal += valorDia;
+            console.log(`     Subtotal acumulado: R$ ${valorTotal.toFixed(2)}`);
           }
         });
 
