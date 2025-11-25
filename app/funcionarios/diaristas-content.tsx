@@ -857,7 +857,8 @@ export default function DiaristasContent() {
                     <tr>
                       <th>Nome</th>
                       <th>Função</th>
-                      <th>Valor Diária</th>
+                      <th>Diária Semana</th>
+                      <th>Diária Fim Semana</th>
                       <th>Status</th>
                       <th>Ações</th>
                     </tr>
@@ -868,7 +869,10 @@ export default function DiaristasContent() {
                         <td className="font-medium">{diarista.nome}</td>
                         <td>{diarista.funcao}</td>
                         <td className="text-gold font-semibold">
-                          {formatCurrency(diarista.valor_diaria)}
+                          {formatCurrency(diarista.valor_diaria_semana || diarista.valor_diaria)}
+                        </td>
+                        <td className="text-blue-400 font-semibold">
+                          {formatCurrency(diarista.valor_diaria_fimsemana || diarista.valor_diaria)}
                         </td>
                         <td>
                           {diarista.ativo ? (
