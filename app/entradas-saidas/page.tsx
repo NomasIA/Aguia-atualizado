@@ -124,19 +124,35 @@ export default function EntradasSaidasPage() {
         .maybeSingle();
 
       const transaction = {
-        ...formData,
+        data: formData.data,
+        tipo: formData.tipo,
+        forma: formData.forma,
+        categoria: formData.categoria,
+        descricao: formData.descricao,
+        valor: formData.valor,
+        observacao: formData.observacao,
         bank_account_id: formData.forma === 'banco' ? bankAccount?.id : null,
         cash_book_id: formData.forma === 'dinheiro' ? cashBook?.id : null,
+        updated_at: new Date().toISOString(),
       };
 
       if (editingTransaction) {
         // Update existing transaction
-        const { error } = await supabase
+        console.log('Atualizando transação:', transaction);
+        console.log('ID da transação:', editingTransaction.id);
+
+        const { data: updated, error } = await supabase
           .from('cash_ledger')
           .update(transaction)
-          .eq('id', editingTransaction.id);
+          .eq('id', editingTransaction.id)
+          .select();
 
-        if (error) throw error;
+        if (error) {
+          console.error('Erro ao atualizar:', error);
+          throw error;
+        }
+
+        console.log('Transação atualizada:', updated);
 
         // Recalcular saldos após edição
         await recalcAll();
