@@ -247,7 +247,27 @@ export default function DiaristasContent() {
         const diasTrabalhados = Object.values(pontosDiarista.dias).filter(p => p).length;
         if (diasTrabalhados === 0) continue;
 
-        const valorTotal = diasTrabalhados * diarista.valor_diaria;
+        // Calcular valor total considerando dias de semana vs fim de semana
+        let valorTotal = 0;
+        let diasSemana = 0;
+        let diasFimSemana = 0;
+
+        Object.entries(pontosDiarista.dias).forEach(([data, presente]) => {
+          if (presente) {
+            const dia = parseISO(data);
+            const diaSemana = dia.getDay();
+
+            if (diaSemana === 0 || diaSemana === 6) {
+              // Domingo (0) ou Sábado (6)
+              diasFimSemana++;
+              valorTotal += diarista.valor_diaria_fimsemana || diarista.valor_diaria;
+            } else {
+              // Segunda a sexta
+              diasSemana++;
+              valorTotal += diarista.valor_diaria_semana || diarista.valor_diaria;
+            }
+          }
+        });
 
         const { error: lancError } = await supabase
           .from('diarista_lancamentos')
@@ -265,6 +285,10 @@ export default function DiaristasContent() {
 
         if (lancError) throw lancError;
 
+        const descricaoDias = diasFimSemana > 0
+          ? `${diasTrabalhados} dias (${diasSemana} semana, ${diasFimSemana} fim de semana)`
+          : `${diasTrabalhados} dias`;
+
         const { error: ledgerError } = await supabase
           .from('cash_ledger')
           .insert([{
@@ -272,7 +296,7 @@ export default function DiaristasContent() {
             tipo: 'saida',
             forma: 'dinheiro',
             categoria: 'diarista',
-            descricao: `Pagamento diarista ${diarista.nome} (${diasTrabalhados} dias)`,
+            descricao: `Pagamento diarista ${diarista.nome} (${descricaoDias})`,
             valor: valorTotal,
             cash_book_id: cashBook.id,
             diarista_id: diarista.id,
