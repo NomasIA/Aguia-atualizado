@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { formatCurrency, formatDate } from '@/lib/format-utils';
-import { Edit, Eye, Link as LinkIcon, Plus, Trash2, Unlink, AlertCircle } from 'lucide-react';
+import { Edit, Eye, Link as LinkIcon, Plus, Trash2, Unlink, AlertCircle, CheckSquare, Square } from 'lucide-react';
 import { EditModeProvider, useEditMode } from '@/lib/edit-mode-context';
 import { StatusBadge } from '@/components/status-badge';
 import { isConciliacaoEnabled } from '@/lib/feature-flags';
@@ -52,6 +52,8 @@ function ConciliacaoContent() {
   const [selectedTransacao, setSelectedTransacao] = useState<string>('');
   const [transacaoTipo, setTransacaoTipo] = useState<'entrada' | 'saida'>('entrada');
   const [stats, setStats] = useState({ total: 0, conciliados: 0, naoConciliados: 0, percentualConciliado: '0' });
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
 
   // Check if conciliation feature is enabled
   const conciliacaoEnabled = isConciliacaoEnabled();
@@ -206,6 +208,57 @@ function ConciliacaoContent() {
     }
   }
 
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return;
+
+    try {
+      const idsArray = Array.from(selectedIds);
+      console.log(`Excluindo ${idsArray.length} extratos...`);
+
+      // Deletar cada extrato
+      const deletePromises = idsArray.map(id =>
+        fetch(`/api/extratos?id=${id}`, { method: 'DELETE' }).then(r => r.json())
+      );
+
+      const results = await Promise.all(deletePromises);
+
+      const successCount = results.filter(r => r.success).length;
+      const errorCount = results.length - successCount;
+
+      if (errorCount === 0) {
+        toast.success(`${successCount} linha(s) excluída(s) com sucesso`);
+      } else {
+        toast.error(`${successCount} excluída(s), ${errorCount} com erro`);
+      }
+
+      setBulkDeleteDialogOpen(false);
+      setSelectedIds(new Set());
+      await loadData();
+    } catch (error) {
+      console.error('Erro ao excluir extratos:', error);
+      toast.error('Erro ao processar exclusão');
+    }
+  }
+
+  function toggleSelection(id: string) {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === extratos.length) {
+      setSelectedIds(new Set());
+    } else {
+      const allIds = new Set(extratos.map(e => e.id));
+      setSelectedIds(allIds);
+    }
+  }
+
   function getStatus(extrato: Extrato): string {
     if (extrato.conciliado_com_transacao_id) {
       return 'Conciliado';
@@ -247,9 +300,20 @@ function ConciliacaoContent() {
             <h1 className="text-3xl font-bold">Conciliação Bancária</h1>
             <p className="text-gray-600">Gerencie a conciliação de extratos bancários</p>
           </div>
-          <Button onClick={toggleEditMode} variant={isEditMode ? 'default' : 'outline'}>
-            {isEditMode ? <><Eye className="mr-2 h-4 w-4" /> Modo Visualização</> : <><Edit className="mr-2 h-4 w-4" /> Modo Edição</>}
-          </Button>
+          <div className="flex gap-3">
+            {isEditMode && selectedIds.size > 0 && (
+              <Button
+                onClick={() => setBulkDeleteDialogOpen(true)}
+                variant="destructive"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Excluir {selectedIds.size} selecionada{selectedIds.size > 1 ? 's' : ''}
+              </Button>
+            )}
+            <Button onClick={toggleEditMode} variant={isEditMode ? 'default' : 'outline'}>
+              {isEditMode ? <><Eye className="mr-2 h-4 w-4" /> Modo Visualização</> : <><Edit className="mr-2 h-4 w-4" /> Modo Edição</>}
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -291,6 +355,21 @@ function ConciliacaoContent() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {isEditMode && (
+                      <TableHead className="w-12">
+                        <button
+                          onClick={toggleSelectAll}
+                          className="text-gold hover:text-gold/80"
+                          title="Selecionar todos"
+                        >
+                          {selectedIds.size === extratos.length && extratos.length > 0 ? (
+                            <CheckSquare className="w-5 h-5" />
+                          ) : (
+                            <Square className="w-5 h-5" />
+                          )}
+                        </button>
+                      </TableHead>
+                    )}
                     <TableHead>Data</TableHead>
                     <TableHead>Histórico</TableHead>
                     <TableHead className="text-right">Valor</TableHead>
@@ -302,13 +381,27 @@ function ConciliacaoContent() {
                 <TableBody>
                   {extratos.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={isEditMode ? 6 : 5} className="text-center text-gray-500">
+                      <TableCell colSpan={isEditMode ? 7 : 5} className="text-center text-gray-500">
                         Nenhum extrato encontrado
                       </TableCell>
                     </TableRow>
                   ) : (
                     extratos.map((extrato) => (
                       <TableRow key={extrato.id}>
+                        {isEditMode && (
+                          <TableCell>
+                            <button
+                              onClick={() => toggleSelection(extrato.id)}
+                              className="text-gold hover:text-gold/80"
+                            >
+                              {selectedIds.has(extrato.id) ? (
+                                <CheckSquare className="w-5 h-5" />
+                              ) : (
+                                <Square className="w-5 h-5" />
+                              )}
+                            </button>
+                          </TableCell>
+                        )}
                         <TableCell>{formatDate(extrato.data)}</TableCell>
                         <TableCell className="max-w-xs truncate">{extrato.historico}</TableCell>
                         <TableCell className="text-right">
@@ -395,6 +488,40 @@ function ConciliacaoContent() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Bulk Delete Dialog */}
+        <Dialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Excluir Múltiplas Linhas</DialogTitle>
+              <DialogDescription>
+                Tem certeza que deseja excluir {selectedIds.size} linha(s) de extrato selecionada(s)?
+                <div className="mt-4 p-3 bg-gray-100 rounded border">
+                  <p className="font-semibold mb-2">Linhas selecionadas:</p>
+                  <ul className="text-sm space-y-1 max-h-48 overflow-y-auto">
+                    {Array.from(selectedIds).map(id => {
+                      const extrato = extratos.find(e => e.id === id);
+                      if (!extrato) return null;
+                      return (
+                        <li key={id}>
+                          {formatDate(extrato.data)} - {extrato.historico} - {formatCurrency(extrato.valor)}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex gap-3 mt-4">
+              <Button onClick={() => setBulkDeleteDialogOpen(false)} variant="outline" className="flex-1">
+                Cancelar
+              </Button>
+              <Button onClick={handleBulkDelete} variant="destructive" className="flex-1">
+                Excluir {selectedIds.size} linha(s)
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
