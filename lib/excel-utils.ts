@@ -358,7 +358,164 @@ export interface ImportedTransaction {
   saldo?: number;
 }
 
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+
+  result.push(current.trim());
+  return result;
+}
+
+export function importBankStatementCSV(file: File): Promise<ImportedTransaction[]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split(/\r?\n/);
+
+        console.log('Total de linhas no CSV:', lines.length);
+        console.log('Primeiras 10 linhas:', lines.slice(0, 10));
+
+        const transactions: ImportedTransaction[] = [];
+        let dataRowStart = -1;
+
+        for (let i = 0; i < Math.min(20, lines.length); i++) {
+          const lineLower = lines[i].toLowerCase();
+          if (lineLower.includes('lancamento') ||
+              (lineLower.includes('data') && lineLower.includes('valor'))) {
+            dataRowStart = i + 1;
+            console.log('Header encontrado na linha:', i);
+            break;
+          }
+        }
+
+        if (dataRowStart === -1) {
+          for (let i = 0; i < lines.length; i++) {
+            const cells = parseCSVLine(lines[i]);
+            if (cells[0] && cells[0].match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+              dataRowStart = i;
+              console.log('Primeira linha de dados encontrada:', i);
+              break;
+            }
+          }
+        }
+
+        if (dataRowStart === -1) {
+          dataRowStart = 0;
+        }
+
+        for (let i = dataRowStart; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+
+          const cells = parseCSVLine(line);
+          if (cells.length < 2) continue;
+
+          const dataStr = cells[0];
+          const lancamento = cells[1] || '';
+          const razaoSocial = cells[2] || '';
+
+          let valorRaw = null;
+          for (let col = 3; col < cells.length; col++) {
+            const cell = cells[col].trim();
+            if (cell && (cell.match(/[\d,.-]/) || !isNaN(parseFloat(cell.replace(',', '.'))))) {
+              valorRaw = cell;
+              break;
+            }
+          }
+
+          const lancamentoLower = lancamento.toLowerCase();
+          if (!dataStr ||
+              lancamentoLower.includes('saldo total') ||
+              lancamentoLower.includes('saldo anterior') ||
+              lancamentoLower === 'data' ||
+              lancamentoLower === '') {
+            continue;
+          }
+
+          let dataFormatted: string;
+          try {
+            if (dataStr.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+              const parsedDate = parse(dataStr, 'dd/MM/yyyy', new Date());
+              dataFormatted = format(parsedDate, 'yyyy-MM-dd');
+            } else {
+              continue;
+            }
+          } catch {
+            continue;
+          }
+
+          if (!valorRaw) continue;
+
+          const isNegative = valorRaw.includes('-');
+          const cleanValue = valorRaw.replace(/[^\d,]/g, '').replace(',', '.');
+          const valor = Math.abs(parseFloat(cleanValue) || 0);
+
+          if (valor === 0) continue;
+
+          const tipo: 'entrada' | 'saida' = isNegative ? 'saida' : 'entrada';
+
+          const descricaoCompleta = razaoSocial && razaoSocial.trim() !== ''
+            ? `${lancamento} - ${razaoSocial}`.substring(0, 200)
+            : lancamento.substring(0, 200);
+
+          let categoria = 'Outros';
+          if (lancamentoLower.includes('pix')) {
+            categoria = 'PIX';
+          } else if (lancamentoLower.includes('ted') || lancamentoLower.includes('transferencia')) {
+            categoria = 'Transferência';
+          } else if (lancamentoLower.includes('sispag') || lancamentoLower.includes('fornecedor')) {
+            categoria = 'Fornecedores';
+          } else if (lancamentoLower.includes('recebimento') || lancamentoLower.includes('receita')) {
+            categoria = 'Receitas';
+          } else if (lancamentoLower.includes('rendimento')) {
+            categoria = 'Rendimentos';
+          }
+
+          transactions.push({
+            data: dataFormatted,
+            descricao: descricaoCompleta,
+            valor,
+            tipo,
+            categoria,
+          });
+        }
+
+        console.log('Total de transações encontradas:', transactions.length);
+        resolve(transactions);
+      } catch (error) {
+        console.error('Erro ao processar CSV:', error);
+        reject(error);
+      }
+    };
+
+    reader.onerror = () => reject(new Error('Erro ao ler arquivo'));
+    reader.readAsText(file, 'ISO-8859-1');
+  });
+}
+
 export function importBankStatement(file: File): Promise<ImportedTransaction[]> {
+  const fileName = file.name.toLowerCase();
+  if (fileName.endsWith('.csv') || fileName.endsWith('.txt')) {
+    return importBankStatementCSV(file);
+  }
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
