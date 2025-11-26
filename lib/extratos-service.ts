@@ -159,7 +159,7 @@ export async function importExtratos(
  */
 export async function softDeleteExtrato(extratoId: string): Promise<SoftDeleteExtratoResult> {
   try {
-    // Get statement line to check source
+    // Get statement line
     const { data: extrato, error: fetchError } = await supabase
       .from('extratos_importados')
       .select('*')
@@ -171,15 +171,6 @@ export async function softDeleteExtrato(extratoId: string): Promise<SoftDeleteEx
         success: false,
         message: 'Linha de extrato não encontrada',
         error: fetchError?.message
-      };
-    }
-
-    // Check if source is manual_upload
-    if (extrato.source !== 'manual_upload') {
-      return {
-        success: false,
-        message: 'Apenas linhas importadas manualmente podem ser excluídas',
-        error: 'Invalid source'
       };
     }
 
