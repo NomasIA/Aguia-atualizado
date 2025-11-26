@@ -311,7 +311,11 @@ function ConciliacaoContent() {
                       <TableRow key={extrato.id}>
                         <TableCell>{formatDate(extrato.data)}</TableCell>
                         <TableCell className="max-w-xs truncate">{extrato.historico}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(extrato.valor)}</TableCell>
+                        <TableCell className="text-right">
+                          <span className={`font-semibold ${extrato.valor >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {extrato.valor >= 0 ? 'ENTRADA' : 'SAÍDA'} {formatCurrency(Math.abs(extrato.valor))}
+                          </span>
+                        </TableCell>
                         <TableCell className="text-right">{formatCurrency(extrato.saldo)}</TableCell>
                         <TableCell>
                           <StatusBadge status={getStatus(extrato)} />
@@ -363,42 +367,6 @@ function ConciliacaoContent() {
                                     </DialogContent>
                                   </Dialog>
 
-                                  <Dialog>
-                                    <DialogTrigger asChild>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => setSelectedExtrato(extrato)}
-                                      >
-                                        <Plus className="h-4 w-4" />
-                                      </Button>
-                                    </DialogTrigger>
-                                    <DialogContent>
-                                      <DialogHeader>
-                                        <DialogTitle>Criar e Conciliar</DialogTitle>
-                                        <DialogDescription>
-                                          Criar nova transação a partir deste extrato
-                                        </DialogDescription>
-                                      </DialogHeader>
-                                      <div className="space-y-4">
-                                        <div>
-                                          <Label>Tipo de Transação</Label>
-                                          <Select value={transacaoTipo} onValueChange={(v) => setTransacaoTipo(v as 'entrada' | 'saida')}>
-                                            <SelectTrigger>
-                                              <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="entrada">Entrada</SelectItem>
-                                              <SelectItem value="saida">Saída</SelectItem>
-                                            </SelectContent>
-                                          </Select>
-                                        </div>
-                                        <Button onClick={() => handleCriarEConciliar(extrato.id)} className="w-full">
-                                          Criar e Conciliar
-                                        </Button>
-                                      </div>
-                                    </DialogContent>
-                                  </Dialog>
                                 </>
                               ) : (
                                 <Button
