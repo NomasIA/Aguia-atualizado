@@ -100,11 +100,15 @@ export async function getPaymentDate(
   const dayOfWeek = getDay(originalDate);
 
   if (dayOfWeek === 6) {
-    return await adjustToBusinessDay(originalDate, 'before');
+    const adjusted = new Date(originalDate);
+    adjusted.setDate(adjusted.getDate() - 1);
+    return adjusted;
   }
 
   if (dayOfWeek === 0) {
-    return await adjustToBusinessDay(originalDate, 'after');
+    const adjusted = new Date(originalDate);
+    adjusted.setDate(adjusted.getDate() + 1);
+    return adjusted;
   }
 
   const isHoliday = !(await isBusinessDay(originalDate));

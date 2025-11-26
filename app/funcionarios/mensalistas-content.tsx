@@ -825,7 +825,7 @@ export default function MensalistasContent() {
                         </div>
                         <p className="text-xs text-muted italic ml-6">
                           {getDay(modalData.dataOriginal) === 6 && 'Ajustado: Sábado → Sexta-feira anterior'}
-                          {getDay(modalData.dataOriginal) === 0 && 'Ajustado: Domingo → Próximo dia útil'}
+                          {getDay(modalData.dataOriginal) === 0 && 'Ajustado: Domingo → Segunda-feira'}
                           {getDay(modalData.dataOriginal) !== 0 && getDay(modalData.dataOriginal) !== 6 && 'Ajustado: Feriado → Dia útil anterior'}
                         </p>
                       </div>
