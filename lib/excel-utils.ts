@@ -368,43 +368,80 @@ export function importBankStatement(file: File): Promise<ImportedTransaction[]> 
         const workbook = XLSX.read(data, { type: 'binary' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+
+        console.log('Total de linhas:', jsonData.length);
+        console.log('Primeiras 10 linhas:', jsonData.slice(0, 10));
 
         const transactions: ImportedTransaction[] = [];
         let dataRowStart = -1;
+        let headerRow = -1;
 
         for (let i = 0; i < jsonData.length; i++) {
           const row = jsonData[i];
-          if (row[0] === 'Data' || (typeof row[0] === 'string' && row[0].toLowerCase().includes('data'))) {
+          const firstCell = String(row[0] || '').toLowerCase();
+
+          if (firstCell.includes('data') || firstCell === 'data') {
+            headerRow = i;
             dataRowStart = i + 1;
+            console.log('Header encontrado na linha:', i);
+            console.log('Header row:', row);
             break;
           }
         }
 
         if (dataRowStart === -1) {
-          dataRowStart = 0;
           for (let i = 0; i < jsonData.length; i++) {
             const row = jsonData[i];
             const firstCell = row[0];
             if (typeof firstCell === 'string' && firstCell.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
               dataRowStart = i;
+              console.log('Data row start encontrado na linha:', i);
               break;
             }
           }
         }
 
+        if (dataRowStart === -1) {
+          dataRowStart = 0;
+        }
+
+        console.log('Iniciando leitura a partir da linha:', dataRowStart);
+
         for (let i = dataRowStart; i < jsonData.length; i++) {
           const row = jsonData[i];
 
-          if (!row || row.length < 2) continue;
+          if (!row || row.length < 2) {
+            console.log(`Linha ${i}: vazia ou muito curta`);
+            continue;
+          }
 
           const dataStr = row[0];
-          const lancamento = row[1] || '';
-          const razaoSocial = row[2] || '';
-          const valorRaw = row[4];
-          const saldoRaw = row[5];
+          const lancamento = String(row[1] || '');
+          const razaoSocial = String(row[2] || '');
 
-          if (!dataStr || lancamento.toString().toLowerCase().includes('saldo total')) {
+          let valorRaw = null;
+          let saldoRaw = null;
+
+          for (let col = 3; col < row.length; col++) {
+            const cellValue = row[col];
+            if (cellValue !== '' && cellValue !== null && cellValue !== undefined) {
+              if (valorRaw === null) {
+                valorRaw = cellValue;
+              } else if (saldoRaw === null) {
+                saldoRaw = cellValue;
+                break;
+              }
+            }
+          }
+
+          const lancamentoLower = lancamento.toLowerCase();
+          if (!dataStr ||
+              lancamentoLower.includes('saldo total') ||
+              lancamentoLower.includes('saldo anterior') ||
+              lancamentoLower === 'data' ||
+              lancamentoLower === '') {
+            console.log(`Linha ${i}: ignorada (${lancamento})`);
             continue;
           }
 
@@ -417,33 +454,38 @@ export function importBankStatement(file: File): Promise<ImportedTransaction[]> 
               const parsedDate = parse(dataStr, 'dd/MM/yyyy', new Date());
               dataFormatted = format(parsedDate, 'yyyy-MM-dd');
             } else {
+              console.log(`Linha ${i}: data inválida (${dataStr})`);
               continue;
             }
-          } catch {
+          } catch (err) {
+            console.log(`Linha ${i}: erro ao parsear data (${dataStr})`);
             continue;
           }
 
           let valor = 0;
+          let isNegative = false;
+
           if (typeof valorRaw === 'number') {
             valor = Math.abs(valorRaw);
+            isNegative = valorRaw < 0;
           } else if (typeof valorRaw === 'string') {
-            const cleanValue = valorRaw.replace(/[^\d,-]/g, '').replace(',', '.');
+            isNegative = valorRaw.includes('-');
+            const cleanValue = valorRaw.replace(/[^\d,]/g, '').replace(',', '.');
             valor = Math.abs(parseFloat(cleanValue) || 0);
           }
 
-          if (valor === 0) continue;
+          if (valor === 0) {
+            console.log(`Linha ${i}: valor zero ou inválido (${valorRaw})`);
+            continue;
+          }
 
-          const tipo: 'entrada' | 'saida' = (typeof valorRaw === 'number' && valorRaw > 0) ||
-                                            (typeof valorRaw === 'string' && !valorRaw.includes('-'))
-            ? 'entrada'
-            : 'saida';
+          const tipo: 'entrada' | 'saida' = isNegative ? 'saida' : 'entrada';
 
-          const descricaoCompleta = razaoSocial
+          const descricaoCompleta = razaoSocial && razaoSocial.trim() !== ''
             ? `${lancamento} - ${razaoSocial}`.substring(0, 200)
             : lancamento.substring(0, 200);
 
           let categoria = 'Outros';
-          const lancamentoLower = lancamento.toLowerCase();
           if (lancamentoLower.includes('pix')) {
             categoria = 'PIX';
           } else if (lancamentoLower.includes('ted') || lancamentoLower.includes('transferencia')) {
@@ -459,10 +501,12 @@ export function importBankStatement(file: File): Promise<ImportedTransaction[]> 
           let saldo: number | undefined;
           if (typeof saldoRaw === 'number') {
             saldo = saldoRaw;
-          } else if (typeof saldoRaw === 'string') {
+          } else if (typeof saldoRaw === 'string' && saldoRaw.trim() !== '') {
             const cleanSaldo = saldoRaw.replace(/[^\d,-]/g, '').replace(',', '.');
             saldo = parseFloat(cleanSaldo) || undefined;
           }
+
+          console.log(`Linha ${i}: OK - ${dataFormatted} - ${tipo} - ${valor}`);
 
           transactions.push({
             data: dataFormatted,
@@ -474,8 +518,10 @@ export function importBankStatement(file: File): Promise<ImportedTransaction[]> 
           });
         }
 
+        console.log('Total de transações encontradas:', transactions.length);
         resolve(transactions);
       } catch (error) {
+        console.error('Erro ao processar Excel:', error);
         reject(error);
       }
     };
