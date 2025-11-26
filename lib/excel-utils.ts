@@ -365,23 +365,57 @@ export function importBankStatement(file: File): Promise<ImportedTransaction[]> 
     reader.onload = (e) => {
       try {
         const data = e.target?.result;
-        const workbook = XLSX.read(data, { type: 'binary' });
+        const workbook = XLSX.read(data, {
+          type: 'binary',
+          cellDates: true,
+          cellNF: false,
+          cellText: false
+        });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+
+        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+        console.log('Range do worksheet:', worksheet['!ref']);
+        console.log('Total de linhas no range:', range.e.r + 1);
+
+        const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, {
+          header: 1,
+          defval: '',
+          blankrows: false,
+          raw: false
+        });
 
         console.log('Total de linhas:', jsonData.length);
         console.log('Primeiras 10 linhas:', jsonData.slice(0, 10));
+
+        if (jsonData.length === 0) {
+          console.log('Tentando leitura manual célula por célula...');
+          const manualData: any[][] = [];
+          for (let row = range.s.r; row <= range.e.r; row++) {
+            const rowData: any[] = [];
+            for (let col = range.s.c; col <= range.e.c; col++) {
+              const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+              const cell = worksheet[cellAddress];
+              rowData.push(cell ? (cell.w || cell.v || '') : '');
+            }
+            manualData.push(rowData);
+          }
+          console.log('Dados lidos manualmente:', manualData.length, 'linhas');
+          console.log('Primeiras 10 linhas manuais:', manualData.slice(0, 10));
+          jsonData.length = 0;
+          jsonData.push(...manualData);
+        }
 
         const transactions: ImportedTransaction[] = [];
         let dataRowStart = -1;
         let headerRow = -1;
 
-        for (let i = 0; i < jsonData.length; i++) {
+        for (let i = 0; i < Math.min(20, jsonData.length); i++) {
           const row = jsonData[i];
-          const firstCell = String(row[0] || '').toLowerCase();
+          const rowStr = row.join(' ').toLowerCase();
 
-          if (firstCell.includes('data') || firstCell === 'data') {
+          if (rowStr.includes('lancamento') ||
+              (rowStr.includes('data') && rowStr.includes('valor'))) {
             headerRow = i;
             dataRowStart = i + 1;
             console.log('Header encontrado na linha:', i);
@@ -393,16 +427,22 @@ export function importBankStatement(file: File): Promise<ImportedTransaction[]> 
         if (dataRowStart === -1) {
           for (let i = 0; i < jsonData.length; i++) {
             const row = jsonData[i];
-            const firstCell = row[0];
-            if (typeof firstCell === 'string' && firstCell.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+            if (!row || row.length === 0) continue;
+
+            const firstCell = String(row[0] || '');
+            const secondCell = String(row[1] || '');
+
+            if (firstCell.match(/^\d{2}\/\d{2}\/\d{4}$/) && secondCell.length > 0) {
               dataRowStart = i;
               console.log('Data row start encontrado na linha:', i);
+              console.log('Primeira linha de dados:', row);
               break;
             }
           }
         }
 
         if (dataRowStart === -1) {
+          console.log('Nenhum cabeçalho ou data encontrada. Começando da linha 0');
           dataRowStart = 0;
         }
 
