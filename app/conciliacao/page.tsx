@@ -54,6 +54,7 @@ function ConciliacaoContent() {
   const [stats, setStats] = useState({ total: 0, conciliados: 0, naoConciliados: 0, percentualConciliado: '0' });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  const [bulkConciliarDialogOpen, setBulkConciliarDialogOpen] = useState(false);
 
   // Check if conciliation feature is enabled
   const conciliacaoEnabled = isConciliacaoEnabled();
@@ -259,6 +260,48 @@ function ConciliacaoContent() {
     }
   }
 
+  async function handleBulkConciliar() {
+    if (selectedIds.size === 0) return;
+
+    try {
+      const idsArray = Array.from(selectedIds);
+      console.log(`Conciliando ${idsArray.length} extratos...`);
+
+      // Criar e conciliar cada extrato
+      const conciliarPromises = idsArray.map(extratoId =>
+        fetch('/api/conciliacao', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'create',
+            extratoId,
+            tipo: 'entrada',
+            categoria: 'Conciliação automática',
+            conta: 'banco'
+          })
+        }).then(r => r.json())
+      );
+
+      const results = await Promise.all(conciliarPromises);
+
+      const successCount = results.filter(r => r.success).length;
+      const errorCount = results.length - successCount;
+
+      if (errorCount === 0) {
+        toast.success(`${successCount} linha(s) conciliada(s) com sucesso`);
+      } else {
+        toast.error(`${successCount} conciliada(s), ${errorCount} com erro`);
+      }
+
+      setBulkConciliarDialogOpen(false);
+      setSelectedIds(new Set());
+      await loadData();
+    } catch (error) {
+      console.error('Erro ao conciliar extratos:', error);
+      toast.error('Erro ao processar conciliação');
+    }
+  }
+
   function getStatus(extrato: Extrato): string {
     if (extrato.conciliado_com_transacao_id) {
       return 'Conciliado';
@@ -302,13 +345,22 @@ function ConciliacaoContent() {
           </div>
           <div className="flex gap-3">
             {isEditMode && selectedIds.size > 0 && (
-              <Button
-                onClick={() => setBulkDeleteDialogOpen(true)}
-                variant="destructive"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Excluir {selectedIds.size} selecionada{selectedIds.size > 1 ? 's' : ''}
-              </Button>
+              <>
+                <Button
+                  onClick={() => setBulkConciliarDialogOpen(true)}
+                  variant="default"
+                >
+                  <LinkIcon className="w-4 h-4 mr-2" />
+                  Conciliar {selectedIds.size} selecionada{selectedIds.size > 1 ? 's' : ''}
+                </Button>
+                <Button
+                  onClick={() => setBulkDeleteDialogOpen(true)}
+                  variant="destructive"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Excluir {selectedIds.size} selecionada{selectedIds.size > 1 ? 's' : ''}
+                </Button>
+              </>
             )}
             <Button onClick={toggleEditMode} variant={isEditMode ? 'default' : 'outline'}>
               {isEditMode ? <><Eye className="mr-2 h-4 w-4" /> Modo Visualização</> : <><Edit className="mr-2 h-4 w-4" /> Modo Edição</>}
@@ -375,13 +427,12 @@ function ConciliacaoContent() {
                     <TableHead className="text-right">Valor</TableHead>
                     <TableHead className="text-right">Saldo</TableHead>
                     <TableHead>Status</TableHead>
-                    {isEditMode && <TableHead className="text-right">Ações</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {extratos.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={isEditMode ? 7 : 5} className="text-center text-gray-500">
+                      <TableCell colSpan={isEditMode ? 6 : 5} className="text-center text-gray-500">
                         Nenhum extrato encontrado
                       </TableCell>
                     </TableRow>
@@ -413,73 +464,6 @@ function ConciliacaoContent() {
                         <TableCell>
                           <StatusBadge status={getStatus(extrato)} />
                         </TableCell>
-                        {isEditMode && (
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              {!extrato.conciliado_com_transacao_id ? (
-                                <>
-                                  <Dialog>
-                                    <DialogTrigger asChild>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => setSelectedExtrato(extrato)}
-                                      >
-                                        <LinkIcon className="h-4 w-4" />
-                                      </Button>
-                                    </DialogTrigger>
-                                    <DialogContent>
-                                      <DialogHeader>
-                                        <DialogTitle>Conciliar com Transação</DialogTitle>
-                                        <DialogDescription>
-                                          Selecione uma transação existente para vincular
-                                        </DialogDescription>
-                                      </DialogHeader>
-                                      <div className="space-y-4">
-                                        <div>
-                                          <Label>Transação</Label>
-                                          <Select value={selectedTransacao} onValueChange={setSelectedTransacao}>
-                                            <SelectTrigger>
-                                              <SelectValue placeholder="Selecione uma transação" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              {transacoes
-                                                .filter(t => Math.abs(t.valor - Math.abs(extrato.valor)) < 0.01)
-                                                .map((t) => (
-                                                  <SelectItem key={t.id} value={t.id}>
-                                                    {formatDate(t.data)} - {t.descricao} - {formatCurrency(t.valor)}
-                                                  </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                          </Select>
-                                        </div>
-                                        <Button onClick={() => handleConciliarComTransacao(extrato.id)} className="w-full">
-                                          Conciliar
-                                        </Button>
-                                      </div>
-                                    </DialogContent>
-                                  </Dialog>
-
-                                </>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleDesfazerConciliacao(extrato.id)}
-                                >
-                                  <Unlink className="h-4 w-4" />
-                                </Button>
-                              )}
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleExcluirExtrato(extrato.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        )}
                       </TableRow>
                     ))
                   )}
@@ -488,6 +472,40 @@ function ConciliacaoContent() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Bulk Conciliar Dialog */}
+        <Dialog open={bulkConciliarDialogOpen} onOpenChange={setBulkConciliarDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Conciliar Múltiplas Linhas</DialogTitle>
+              <DialogDescription>
+                Tem certeza que deseja criar transações e conciliar automaticamente {selectedIds.size} linha(s) de extrato selecionada(s)?
+                <div className="mt-4 p-3 bg-blue-50 rounded border border-blue-200">
+                  <p className="font-semibold mb-2 text-blue-900">Linhas a conciliar:</p>
+                  <ul className="text-sm space-y-1 max-h-48 overflow-y-auto">
+                    {Array.from(selectedIds).map(id => {
+                      const extrato = extratos.find(e => e.id === id);
+                      if (!extrato) return null;
+                      return (
+                        <li key={id} className="text-blue-800">
+                          {formatDate(extrato.data)} - {extrato.historico} - {formatCurrency(extrato.valor)}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex gap-3 mt-4">
+              <Button onClick={() => setBulkConciliarDialogOpen(false)} variant="outline" className="flex-1">
+                Cancelar
+              </Button>
+              <Button onClick={handleBulkConciliar} variant="default" className="flex-1">
+                Conciliar {selectedIds.size} linha(s)
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Bulk Delete Dialog */}
         <Dialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
