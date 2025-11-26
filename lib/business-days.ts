@@ -28,69 +28,18 @@ export async function adjustToBusinessDay(
   date: Date,
   direction: 'before' | 'after' = 'before'
 ): Promise<Date> {
-  try {
-    const formattedDate = format(date, 'yyyy-MM-dd');
-    console.log('adjustToBusinessDay - Chamando RPC com:', formattedDate, direction);
+  const { data, error } = await supabase
+    .rpc('adjust_to_business_day', {
+      original_date: format(date, 'yyyy-MM-dd'),
+      direction
+    });
 
-    const { data, error } = await supabase
-      .rpc('adjust_to_business_day', {
-        original_date: formattedDate,
-        direction
-      });
-
-    if (error) {
-      console.error('adjustToBusinessDay - RPC error:', error);
-      throw error;
-    }
-
-    console.log('adjustToBusinessDay - RPC retornou:', data);
-    const resultDate = new Date(data);
-    console.log('adjustToBusinessDay - Date convertida:', format(resultDate, 'dd/MM/yyyy'));
-    return resultDate;
-  } catch (error) {
-    console.error('adjustToBusinessDay - ERRO FATAL:', error);
-    console.error('adjustToBusinessDay - Usando fallback (NÃO verifica feriados!)');
-    return adjustToBusinessDayFallback(date, direction);
-  }
-}
-
-function adjustToBusinessDayFallback(
-  date: Date,
-  direction: 'before' | 'after' = 'before'
-): Date {
-  let adjusted = new Date(date);
-  let dayOfWeek = getDay(adjusted);
-
-  if (dayOfWeek === 6) {
-    adjusted.setDate(adjusted.getDate() - 1);
-    return adjusted;
+  if (error) {
+    console.error('Erro ao ajustar data para dia útil:', error);
+    throw error;
   }
 
-  if (dayOfWeek === 0) {
-    adjusted.setDate(adjusted.getDate() + 1);
-    return adjusted;
-  }
-
-  let iterations = 0;
-  const maxIterations = 10;
-
-  while (iterations < maxIterations) {
-    if (direction === 'before') {
-      adjusted.setDate(adjusted.getDate() - 1);
-    } else {
-      adjusted.setDate(adjusted.getDate() + 1);
-    }
-
-    dayOfWeek = getDay(adjusted);
-
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      return adjusted;
-    }
-
-    iterations++;
-  }
-
-  return adjusted;
+  return new Date(data);
 }
 
 export async function getPaymentDate(
@@ -102,41 +51,12 @@ export async function getPaymentDate(
   let originalDate: Date;
 
   if (type === 'VT_ULTIMO_DIA' || type === 'VR_ULTIMO_DIA') {
-    const lastDay = new Date(year, month, 0);
-    originalDate = lastDay;
+    originalDate = new Date(year, month, 0);
   } else {
     originalDate = new Date(year, month - 1, day);
   }
 
-  console.log('getPaymentDate - Original:', format(originalDate, 'dd/MM/yyyy'));
-
-  const dayOfWeek = getDay(originalDate);
-
-  if (dayOfWeek === 6) {
-    const adjusted = new Date(originalDate);
-    adjusted.setDate(adjusted.getDate() - 1);
-    console.log('getPaymentDate - Sábado ajustado para:', format(adjusted, 'dd/MM/yyyy'));
-    return adjusted;
-  }
-
-  if (dayOfWeek === 0) {
-    const adjusted = new Date(originalDate);
-    adjusted.setDate(adjusted.getDate() + 1);
-    console.log('getPaymentDate - Domingo ajustado para:', format(adjusted, 'dd/MM/yyyy'));
-    return adjusted;
-  }
-
-  const isHoliday = !(await isBusinessDay(originalDate));
-  console.log('getPaymentDate - É feriado?', isHoliday);
-
-  if (isHoliday) {
-    const adjusted = await adjustToBusinessDay(originalDate, 'before');
-    console.log('getPaymentDate - Feriado ajustado para:', format(adjusted, 'dd/MM/yyyy'));
-    return adjusted;
-  }
-
-  console.log('getPaymentDate - Dia útil, mantém:', format(originalDate, 'dd/MM/yyyy'));
-  return originalDate;
+  return await adjustToBusinessDay(originalDate, 'before');
 }
 
 export async function getHolidays(
