@@ -292,6 +292,8 @@ export default function DiaristasContent() {
       console.log(`👥 Total de diaristas ativos: ${diaristasFiltrados.length}`);
 
       let totalProcessados = 0;
+      let valorTotalGeral = 0;
+      const diaristasPagos: string[] = [];
 
       for (const diarista of diaristasFiltrados) {
         const pontosDiarista = pontos[diarista.id];
@@ -386,11 +388,22 @@ export default function DiaristasContent() {
         }
         console.log('✅ Lançamento criado:', lancamentoData);
 
-        const descricaoDias = diasFimSemana > 0
-          ? `${diasTrabalhados} dias (${diasSemana} semana, ${diasFimSemana} fim de semana)`
-          : `${diasTrabalhados} dias`;
+        // Acumular valores e nomes para criar UMA única movimentação
+        valorTotalGeral += valorTotal;
+        diaristasPagos.push(diarista.nome);
+        totalProcessados++;
+      }
 
-        console.log(`💰 Inserindo no cash_ledger para ${diarista.nome}...`);
+      // Criar UMA ÚNICA movimentação no cash_ledger com o total de todos os diaristas
+      if (totalProcessados > 0) {
+        console.log(`💰 Inserindo movimentação CONSOLIDADA no cash_ledger...`);
+        console.log(`   Total de diaristas: ${totalProcessados}`);
+        console.log(`   Valor total: R$ ${valorTotalGeral.toFixed(2)}`);
+
+        const descricaoConsolidada = totalProcessados === 1
+          ? `Pagamento diarista ${diaristasPagos[0]}`
+          : `Pagamento de ${totalProcessados} diaristas`;
+
         const { data: ledgerData, error: ledgerError } = await supabase
           .from('cash_ledger')
           .insert([{
@@ -398,10 +411,9 @@ export default function DiaristasContent() {
             tipo: 'saida',
             forma: 'dinheiro',
             categoria: 'diarista',
-            descricao: `Pagamento diarista ${diarista.nome} (${descricaoDias})`,
-            valor: valorTotal,
+            descricao: descricaoConsolidada,
+            valor: valorTotalGeral,
             cash_book_id: cashBook.id,
-            diarista_id: diarista.id,
           }])
           .select();
 
@@ -409,8 +421,7 @@ export default function DiaristasContent() {
           console.error('❌ Erro ao inserir no ledger:', ledgerError);
           throw ledgerError;
         }
-        console.log('✅ Ledger criado:', ledgerData);
-        totalProcessados++;
+        console.log('✅ Movimentação consolidada criada:', ledgerData);
       }
 
       console.log(`\n✅ PROCESSAMENTO CONCLUÍDO! Total de diaristas pagos: ${totalProcessados}`);
