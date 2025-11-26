@@ -253,19 +253,31 @@ export default function DiaristasContent() {
   };
 
   const processarPagamentoSemanal = async () => {
-    if (!confirm('Processar pagamento semanal (sábado a sexta)?')) return;
+    if (!confirm('Processar pagamento semanal (sábado a sexta)?')) {
+      console.log('Usuário cancelou o processamento');
+      return;
+    }
 
+    console.log('🚀 Iniciando processamento de pagamento semanal...');
     const inicio = startOfWeek(semanaAtual, { weekStartsOn: 6 });
     const fim = endOfWeek(semanaAtual, { weekStartsOn: 6 });
+    console.log('📅 Período:', format(inicio, 'dd/MM/yyyy'), 'até', format(fim, 'dd/MM/yyyy'));
 
     try {
-      const { data: cashBook } = await supabase
+      console.log('🔍 Buscando Caixa Dinheiro...');
+      const { data: cashBook, error: cashBookError } = await supabase
         .from('cash_books')
         .select('id')
         .eq('nome', 'Caixa Dinheiro (Físico)')
         .maybeSingle();
 
+      if (cashBookError) {
+        console.error('❌ Erro ao buscar cash book:', cashBookError);
+        throw cashBookError;
+      }
+
       if (!cashBook) {
+        console.error('❌ Caixa dinheiro não encontrado');
         toast({
           title: 'Erro',
           description: 'Caixa dinheiro não encontrado',
@@ -274,12 +286,25 @@ export default function DiaristasContent() {
         return;
       }
 
-      for (const diarista of diaristas.filter(d => d.ativo)) {
+      console.log('✅ Caixa encontrado:', cashBook.id);
+
+      const diaristasFiltrados = diaristas.filter(d => d.ativo);
+      console.log(`👥 Total de diaristas ativos: ${diaristasFiltrados.length}`);
+
+      let totalProcessados = 0;
+
+      for (const diarista of diaristasFiltrados) {
         const pontosDiarista = pontos[diarista.id];
-        if (!pontosDiarista) continue;
+        if (!pontosDiarista) {
+          console.log(`⚠️  ${diarista.nome}: Sem pontos registrados`);
+          continue;
+        }
 
         const diasTrabalhados = Object.values(pontosDiarista.dias).filter(p => p).length;
-        if (diasTrabalhados === 0) continue;
+        if (diasTrabalhados === 0) {
+          console.log(`⚠️  ${diarista.nome}: 0 dias trabalhados`);
+          continue;
+        }
 
         // Calcular valor total considerando dias de semana vs fim de semana
         let valorTotal = 0;
@@ -339,7 +364,8 @@ export default function DiaristasContent() {
         console.log(`  VALOR TOTAL: R$ ${valorTotal.toFixed(2)}`);
         console.log(`${'='.repeat(60)}\n`);
 
-        const { error: lancError } = await supabase
+        console.log(`💾 Inserindo lançamento para ${diarista.nome}...`);
+        const { data: lancamentoData, error: lancError } = await supabase
           .from('diarista_lancamentos')
           .insert([{
             diarista_id: diarista.id,
@@ -351,15 +377,21 @@ export default function DiaristasContent() {
             data_pagamento: format(fim, 'yyyy-MM-dd'),
             pago: true,
             cash_book_id: cashBook.id,
-          }]);
+          }])
+          .select();
 
-        if (lancError) throw lancError;
+        if (lancError) {
+          console.error('❌ Erro ao inserir lançamento:', lancError);
+          throw lancError;
+        }
+        console.log('✅ Lançamento criado:', lancamentoData);
 
         const descricaoDias = diasFimSemana > 0
           ? `${diasTrabalhados} dias (${diasSemana} semana, ${diasFimSemana} fim de semana)`
           : `${diasTrabalhados} dias`;
 
-        const { error: ledgerError } = await supabase
+        console.log(`💰 Inserindo no cash_ledger para ${diarista.nome}...`);
+        const { data: ledgerData, error: ledgerError } = await supabase
           .from('cash_ledger')
           .insert([{
             data: format(fim, 'yyyy-MM-dd'),
@@ -370,17 +402,25 @@ export default function DiaristasContent() {
             valor: valorTotal,
             cash_book_id: cashBook.id,
             diarista_id: diarista.id,
-          }]);
+          }])
+          .select();
 
-        if (ledgerError) throw ledgerError;
+        if (ledgerError) {
+          console.error('❌ Erro ao inserir no ledger:', ledgerError);
+          throw ledgerError;
+        }
+        console.log('✅ Ledger criado:', ledgerData);
+        totalProcessados++;
       }
+
+      console.log(`\n✅ PROCESSAMENTO CONCLUÍDO! Total de diaristas pagos: ${totalProcessados}`);
 
       toast({
         title: 'Sucesso',
-        description: 'Pagamento semanal processado com sucesso',
+        description: `Pagamento semanal processado com sucesso! ${totalProcessados} diarista(s) pago(s).`,
       });
 
-      loadPontoSemanal();
+      await loadPontoSemanal();
     } catch (error) {
       console.error('Erro ao processar pagamento:', error);
       toast({
