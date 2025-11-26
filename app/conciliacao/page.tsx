@@ -38,6 +38,9 @@ interface Transacao {
   descricao: string;
   valor: number;
   tipo: 'entrada' | 'saida';
+  forma_pagamento?: string;
+  categoria?: string;
+  conta?: string;
 }
 
 function ConciliacaoContent() {
@@ -277,11 +280,59 @@ function ConciliacaoContent() {
           </Card>
         </div>
 
+        {/* Transacoes do Sistema */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Transações do Sistema</CardTitle>
+            <CardDescription>Entradas e saídas registradas no sistema</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Descrição</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Forma</TableHead>
+                    <TableHead>Conta</TableHead>
+                    <TableHead className="text-right">Valor</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {transacoes.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-gray-500">
+                        Nenhuma transação encontrada
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    transacoes.map((transacao) => (
+                      <TableRow key={transacao.id}>
+                        <TableCell>{formatDate(transacao.data)}</TableCell>
+                        <TableCell className="max-w-xs truncate">{transacao.descricao}</TableCell>
+                        <TableCell>
+                          <StatusBadge status={transacao.tipo === 'entrada' ? 'Entrada' : 'Saída'} />
+                        </TableCell>
+                        <TableCell>{transacao.forma_pagamento || '-'}</TableCell>
+                        <TableCell>{transacao.conta || '-'}</TableCell>
+                        <TableCell className={`text-right font-semibold ${transacao.tipo === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
+                          {transacao.tipo === 'entrada' ? '+' : '-'} {formatCurrency(Math.abs(transacao.valor))}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Extratos Table */}
         <Card>
           <CardHeader>
-            <CardTitle>Linhas de Extrato</CardTitle>
-            <CardDescription>Lista de transações bancárias importadas</CardDescription>
+            <CardTitle>Linhas de Extrato Bancário</CardTitle>
+            <CardDescription>Extratos bancários importados para conciliação</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
