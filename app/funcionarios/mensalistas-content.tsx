@@ -267,10 +267,12 @@ export default function MensalistasContent() {
 
     console.log('abrirModalConfirmacao - Tipo:', tipo);
     console.log('abrirModalConfirmacao - Data original:', format(dataOriginal, 'dd/MM/yyyy'));
+    console.log('abrirModalConfirmacao - Data original ISO:', format(dataOriginal, 'yyyy-MM-dd'));
 
     const dataPagamento = await getDataPagamento(tipo);
 
     console.log('abrirModalConfirmacao - Data pagamento retornada:', format(dataPagamento, 'dd/MM/yyyy'));
+    console.log('abrirModalConfirmacao - Data pagamento ISO:', format(dataPagamento, 'yyyy-MM-dd'));
     console.log('abrirModalConfirmacao - Datas são iguais?', dataPagamento.getTime() === dataOriginal.getTime());
 
     setModalData({

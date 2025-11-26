@@ -42,8 +42,13 @@ export async function adjustToBusinessDay(
     throw error;
   }
 
-  console.log('adjustToBusinessDay - RPC returned:', data);
-  const result = new Date(data);
+  console.log('adjustToBusinessDay - RPC returned (raw):', data, typeof data);
+
+  // Parse the date string correctly (format: YYYY-MM-DD)
+  const [year, month, day] = data.split('-').map(Number);
+  const result = new Date(year, month - 1, day);
+
+  console.log('adjustToBusinessDay - Parsed:', { year, month, day });
   console.log('adjustToBusinessDay - Final result:', format(result, 'dd/MM/yyyy'));
 
   return result;
