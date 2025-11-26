@@ -97,25 +97,34 @@ export async function getPaymentDate(
     originalDate = new Date(year, month - 1, day);
   }
 
+  console.log('getPaymentDate - Original:', format(originalDate, 'dd/MM/yyyy'));
+
   const dayOfWeek = getDay(originalDate);
 
   if (dayOfWeek === 6) {
     const adjusted = new Date(originalDate);
     adjusted.setDate(adjusted.getDate() - 1);
+    console.log('getPaymentDate - Sábado ajustado para:', format(adjusted, 'dd/MM/yyyy'));
     return adjusted;
   }
 
   if (dayOfWeek === 0) {
     const adjusted = new Date(originalDate);
     adjusted.setDate(adjusted.getDate() + 1);
+    console.log('getPaymentDate - Domingo ajustado para:', format(adjusted, 'dd/MM/yyyy'));
     return adjusted;
   }
 
   const isHoliday = !(await isBusinessDay(originalDate));
+  console.log('getPaymentDate - É feriado?', isHoliday);
+
   if (isHoliday) {
-    return await adjustToBusinessDay(originalDate, 'before');
+    const adjusted = await adjustToBusinessDay(originalDate, 'before');
+    console.log('getPaymentDate - Feriado ajustado para:', format(adjusted, 'dd/MM/yyyy'));
+    return adjusted;
   }
 
+  console.log('getPaymentDate - Dia útil, mantém:', format(originalDate, 'dd/MM/yyyy'));
   return originalDate;
 }
 
