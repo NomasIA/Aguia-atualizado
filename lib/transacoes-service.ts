@@ -53,10 +53,14 @@ export async function softDeleteTransacao(transacaoId: string): Promise<SoftDele
       };
     }
 
-    // Unlink any reconciled bank statements
+    // Delete any reconciled bank statements (soft delete)
     await supabase
       .from('extratos_importados')
-      .update({ conciliado_com_transacao_id: null })
+      .update({
+        deleted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        conciliado_com_transacao_id: null
+      })
       .eq('conciliado_com_transacao_id', transacaoId);
 
     // Note: KPI recalculation happens automatically in queries by filtering deleted_at IS NULL

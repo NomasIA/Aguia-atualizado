@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { formatCurrency, formatDate } from '@/lib/format-utils';
-import { Edit, Eye, Link as LinkIcon, Plus, Trash2, Unlink, AlertCircle, CheckSquare, Square } from 'lucide-react';
+import { Edit, Eye, Link as LinkIcon, AlertCircle, CheckSquare, Square } from 'lucide-react';
 import { EditModeProvider, useEditMode } from '@/lib/edit-mode-context';
 import { StatusBadge } from '@/components/status-badge';
 import { isConciliacaoEnabled } from '@/lib/feature-flags';
@@ -53,7 +53,6 @@ function ConciliacaoContent() {
   const [transacaoTipo, setTransacaoTipo] = useState<'entrada' | 'saida'>('entrada');
   const [stats, setStats] = useState({ total: 0, conciliados: 0, naoConciliados: 0, percentualConciliado: '0' });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [bulkConciliarDialogOpen, setBulkConciliarDialogOpen] = useState(false);
 
   // Check if conciliation feature is enabled
@@ -185,61 +184,6 @@ function ConciliacaoContent() {
     }
   }
 
-  async function handleExcluirExtrato(extratoId: string) {
-    if (!confirm('Tem certeza que deseja excluir esta linha de extrato?')) {
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/extratos?id=${extratoId}`, {
-        method: 'DELETE'
-      });
-
-      const result = await res.json();
-
-      if (result.success) {
-        toast.success('Linha excluída e conciliação atualizada.');
-        await loadData();
-      } else {
-        toast.error(result.message || 'Erro ao excluir linha');
-      }
-    } catch (error) {
-      console.error('Error:', error);
-      toast.error('Erro ao processar exclusão');
-    }
-  }
-
-  async function handleBulkDelete() {
-    if (selectedIds.size === 0) return;
-
-    try {
-      const idsArray = Array.from(selectedIds);
-      console.log(`Excluindo ${idsArray.length} extratos...`);
-
-      // Deletar cada extrato
-      const deletePromises = idsArray.map(id =>
-        fetch(`/api/extratos?id=${id}`, { method: 'DELETE' }).then(r => r.json())
-      );
-
-      const results = await Promise.all(deletePromises);
-
-      const successCount = results.filter(r => r.success).length;
-      const errorCount = results.length - successCount;
-
-      if (errorCount === 0) {
-        toast.success(`${successCount} linha(s) excluída(s) com sucesso`);
-      } else {
-        toast.error(`${successCount} excluída(s), ${errorCount} com erro`);
-      }
-
-      setBulkDeleteDialogOpen(false);
-      setSelectedIds(new Set());
-      await loadData();
-    } catch (error) {
-      console.error('Erro ao excluir extratos:', error);
-      toast.error('Erro ao processar exclusão');
-    }
-  }
 
   function toggleSelection(id: string) {
     const newSelected = new Set(selectedIds);
@@ -345,22 +289,13 @@ function ConciliacaoContent() {
           </div>
           <div className="flex gap-3">
             {isEditMode && selectedIds.size > 0 && (
-              <>
-                <Button
-                  onClick={() => setBulkConciliarDialogOpen(true)}
-                  variant="default"
-                >
-                  <LinkIcon className="w-4 h-4 mr-2" />
-                  Conciliar {selectedIds.size} selecionada{selectedIds.size > 1 ? 's' : ''}
-                </Button>
-                <Button
-                  onClick={() => setBulkDeleteDialogOpen(true)}
-                  variant="destructive"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Excluir {selectedIds.size} selecionada{selectedIds.size > 1 ? 's' : ''}
-                </Button>
-              </>
+              <Button
+                onClick={() => setBulkConciliarDialogOpen(true)}
+                variant="default"
+              >
+                <LinkIcon className="w-4 h-4 mr-2" />
+                Conciliar {selectedIds.size} selecionada{selectedIds.size > 1 ? 's' : ''}
+              </Button>
             )}
             <Button onClick={toggleEditMode} variant={isEditMode ? 'default' : 'outline'}>
               {isEditMode ? <><Eye className="mr-2 h-4 w-4" /> Modo Visualização</> : <><Edit className="mr-2 h-4 w-4" /> Modo Edição</>}
@@ -494,6 +429,11 @@ function ConciliacaoContent() {
                     })}
                   </ul>
                 </div>
+                <div className="mt-4 p-3 bg-yellow-50 rounded border border-yellow-200">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Nota:</strong> Para excluir linhas conciliadas, use a aba "Entradas & Saídas". Ao excluir uma transação, o extrato vinculado será automaticamente excluído.
+                  </p>
+                </div>
               </DialogDescription>
             </DialogHeader>
             <div className="flex gap-3 mt-4">
@@ -502,40 +442,6 @@ function ConciliacaoContent() {
               </Button>
               <Button onClick={handleBulkConciliar} variant="default" className="flex-1">
                 Conciliar {selectedIds.size} linha(s)
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Bulk Delete Dialog */}
-        <Dialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Excluir Múltiplas Linhas</DialogTitle>
-              <DialogDescription>
-                Tem certeza que deseja excluir {selectedIds.size} linha(s) de extrato selecionada(s)?
-                <div className="mt-4 p-3 bg-gray-100 rounded border">
-                  <p className="font-semibold mb-2">Linhas selecionadas:</p>
-                  <ul className="text-sm space-y-1 max-h-48 overflow-y-auto">
-                    {Array.from(selectedIds).map(id => {
-                      const extrato = extratos.find(e => e.id === id);
-                      if (!extrato) return null;
-                      return (
-                        <li key={id}>
-                          {formatDate(extrato.data)} - {extrato.historico} - {formatCurrency(extrato.valor)}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex gap-3 mt-4">
-              <Button onClick={() => setBulkDeleteDialogOpen(false)} variant="outline" className="flex-1">
-                Cancelar
-              </Button>
-              <Button onClick={handleBulkDelete} variant="destructive" className="flex-1">
-                Excluir {selectedIds.size} linha(s)
               </Button>
             </div>
           </DialogContent>
