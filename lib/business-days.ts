@@ -105,11 +105,7 @@ export async function getPaymentDate(
   }
 
   if (dayOfWeek === 0) {
-    if (type === 'SALARIO_5' || type === 'VALE_20') {
-      return await adjustToBusinessDay(originalDate, 'after');
-    } else {
-      return await adjustToBusinessDay(originalDate, 'before');
-    }
+    return await adjustToBusinessDay(originalDate, 'after');
   }
 
   const isHoliday = !(await isBusinessDay(originalDate));
@@ -196,7 +192,7 @@ export function formatPaymentDateInfo(
   if (dayOfWeek === 6) {
     reason = '(ajustado: sábado → sexta-feira)';
   } else if (dayOfWeek === 0) {
-    reason = '(ajustado: domingo → dia útil)';
+    reason = '(ajustado: domingo → segunda-feira)';
   } else {
     reason = '(ajustado: feriado → dia útil anterior)';
   }
