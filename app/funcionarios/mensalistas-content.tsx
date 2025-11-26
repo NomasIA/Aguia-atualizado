@@ -42,6 +42,7 @@ interface PayrollRun {
   status: 'processado' | 'desfeito';
   created_at: string;
   ledger_id: string;
+  competencia: string;
 }
 
 type TipoPagamento = 'SALARIO_5' | 'VALE_20' | 'VT_ULTIMO_DIA' | 'VR_ULTIMO_DIA';
@@ -337,7 +338,21 @@ export default function MensalistasContent() {
 
       setModalOpen(false);
       setModalData(null);
-      loadData();
+
+      // Se pagou SALÁRIO (dia 5), avançar para o próximo mês
+      if (modalData.tipo === 'SALARIO_5') {
+        const [ano, mes] = competencia.split('-');
+        const proximaData = new Date(parseInt(ano), parseInt(mes), 1); // Próximo mês
+        const proximaCompetencia = format(proximaData, 'yyyy-MM');
+        setCompetencia(proximaCompetencia);
+        toast({
+          title: 'Competência Atualizada',
+          description: `Avançado para ${proximaCompetencia}`,
+          variant: 'default'
+        });
+      } else {
+        loadData();
+      }
     } catch (error: any) {
       console.error('Erro ao processar pagamento:', error);
       toast({
@@ -379,7 +394,22 @@ export default function MensalistasContent() {
 
       setUndoDialogOpen(false);
       setSelectedRun(null);
-      loadData();
+
+      // Se desfez SALÁRIO (dia 5), voltar para o mês da competência desfeita
+      if (selectedRun.tipo === 'SALARIO_5') {
+        // Extrair competência do payroll run (formato: yyyy-MM-dd)
+        const runCompetenciaDate = new Date(selectedRun.competencia);
+        const runCompetencia = format(runCompetenciaDate, 'yyyy-MM');
+
+        setCompetencia(runCompetencia);
+        toast({
+          title: 'Competência Restaurada',
+          description: `Voltou para ${runCompetencia}`,
+          variant: 'default'
+        });
+      } else {
+        loadData();
+      }
     } catch (error: any) {
       console.error('Erro ao desfazer pagamento:', error);
       toast({
