@@ -28,18 +28,25 @@ export async function adjustToBusinessDay(
   date: Date,
   direction: 'before' | 'after' = 'before'
 ): Promise<Date> {
+  const formattedDate = format(date, 'yyyy-MM-dd');
+  console.log('adjustToBusinessDay - Input:', formattedDate);
+
   const { data, error } = await supabase
     .rpc('adjust_to_business_day', {
-      original_date: format(date, 'yyyy-MM-dd'),
+      original_date: formattedDate,
       direction
     });
 
   if (error) {
-    console.error('Erro ao ajustar data para dia útil:', error);
+    console.error('adjustToBusinessDay - ERROR:', error);
     throw error;
   }
 
-  return new Date(data);
+  console.log('adjustToBusinessDay - RPC returned:', data);
+  const result = new Date(data);
+  console.log('adjustToBusinessDay - Final result:', format(result, 'dd/MM/yyyy'));
+
+  return result;
 }
 
 export async function getPaymentDate(
@@ -56,7 +63,14 @@ export async function getPaymentDate(
     originalDate = new Date(year, month - 1, day);
   }
 
-  return await adjustToBusinessDay(originalDate, 'before');
+  console.log('getPaymentDate - Original date:', format(originalDate, 'dd/MM/yyyy'));
+  console.log('getPaymentDate - Chamando adjustToBusinessDay...');
+
+  const adjusted = await adjustToBusinessDay(originalDate, 'before');
+
+  console.log('getPaymentDate - Data ajustada retornada:', format(adjusted, 'dd/MM/yyyy'));
+
+  return adjusted;
 }
 
 export async function getHolidays(

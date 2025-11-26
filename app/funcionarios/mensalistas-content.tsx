@@ -155,12 +155,16 @@ export default function MensalistasContent() {
       day = 20;
     }
 
+    console.log('getDataPagamento - Chamando getPaymentDate com:', { ano: parseInt(ano), mes: parseInt(mes), day, tipo });
+
     const adjustedDate = await getPaymentDate(
       parseInt(ano),
       parseInt(mes),
       day,
       tipo
     );
+
+    console.log('getDataPagamento - Retornou:', format(adjustedDate, 'dd/MM/yyyy'));
 
     return adjustedDate;
   };
