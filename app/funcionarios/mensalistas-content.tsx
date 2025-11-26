@@ -5,16 +5,14 @@ import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { DollarSign, Banknote, Bus, Check, AlertCircle, Undo2, Plus, Edit, Trash2, Gift, UtensilsCrossed } from 'lucide-react';
+import { DollarSign, Banknote, Bus, Plus, Edit, Trash2, Gift, UtensilsCrossed, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { format, startOfMonth, getDay } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { createLedgerEntry, recalcAll, deleteLedgerEntry } from '@/lib/ledger-sync';
+import { format, startOfMonth } from 'date-fns';
+import { createLedgerEntry, recalcAll } from '@/lib/ledger-sync';
 import { revalidateAfterFolha, revalidateAll } from '@/lib/revalidation-utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { getPaymentDate, formatPaymentDateInfo } from '@/lib/business-days';
 import { DecimoTerceiroModal } from './decimo-terceiro-modal';
 import { ValeRefeicaoCalculator } from '@/components/vale-refeicao-calculator';
 
@@ -64,8 +62,6 @@ export default function MensalistasContent() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalData, setModalData] = useState<ModalData | null>(null);
   const [dataPagamentoSelecionada, setDataPagamentoSelecionada] = useState('');
-  const [undoDialogOpen, setUndoDialogOpen] = useState(false);
-  const [selectedRun, setSelectedRun] = useState<PayrollRun | null>(null);
   const [cadastroDialogOpen, setCadastroDialogOpen] = useState(false);
   const [editingMensalista, setEditingMensalista] = useState<Mensalista | null>(null);
   const [decimoModalOpen, setDecimoModalOpen] = useState(false);
@@ -149,28 +145,6 @@ export default function MensalistasContent() {
     return salario + ajuda + vt + vr;
   };
 
-  const getDataPagamento = async (tipo: TipoPagamento): Promise<Date> => {
-    const [ano, mes] = competencia.split('-');
-
-    let day = 5;
-    if (tipo === 'VALE_20') {
-      day = 20;
-    }
-
-    console.log('getDataPagamento - Chamando getPaymentDate com:', { ano: parseInt(ano), mes: parseInt(mes), day, tipo });
-
-    const adjustedDate = await getPaymentDate(
-      parseInt(ano),
-      parseInt(mes),
-      day,
-      tipo
-    );
-
-    console.log('getDataPagamento - Retornou:', format(adjustedDate, 'dd/MM/yyyy'));
-
-    return adjustedDate;
-  };
-
   const getTipoLabel = (tipo: TipoPagamento) => {
     switch (tipo) {
       case 'SALARIO_5': return 'Salário (dia 5)';
@@ -241,17 +215,6 @@ export default function MensalistasContent() {
   };
 
   const abrirModalConfirmacao = async (tipo: TipoPagamento) => {
-    const jaProcessado = payrollRuns.find(r => r.tipo === tipo && r.status === 'processado');
-
-    if (jaProcessado) {
-      toast({
-        title: 'Aviso',
-        description: 'Este pagamento já foi processado para esta competência',
-        variant: 'destructive'
-      });
-      return;
-    }
-
     const { detalhes, total, count } = calcularTotaisPorTipo(tipo);
 
     if (count === 0) {
@@ -335,32 +298,7 @@ export default function MensalistasContent() {
 
       setModalOpen(false);
       setModalData(null);
-
-      // Se pagou SALÁRIO (dia 5), avançar para o próximo mês
-      if (modalData.tipo === 'SALARIO_5') {
-        const [ano, mes] = competencia.split('-');
-        // Criar data do mês atual e adicionar 1 mês
-        const dataAtual = new Date(parseInt(ano), parseInt(mes) - 1, 1);
-        const proximaData = new Date(dataAtual.getFullYear(), dataAtual.getMonth() + 1, 1);
-        const proximaCompetencia = format(proximaData, 'yyyy-MM');
-
-        // Limpar payrollRuns ANTES de mudar competência para liberar os botões imediatamente
-        setPayrollRuns([]);
-        setCompetencia(proximaCompetencia);
-
-        // Aguardar um pouco e recarregar dados do novo mês
-        setTimeout(() => {
-          loadData();
-        }, 100);
-
-        toast({
-          title: 'Competência Atualizada',
-          description: `Avançado para ${proximaCompetencia}`,
-          variant: 'default'
-        });
-      } else {
-        loadData();
-      }
+      loadData();
     } catch (error: any) {
       console.error('Erro ao processar pagamento:', error);
       toast({
@@ -373,74 +311,6 @@ export default function MensalistasContent() {
     }
   };
 
-  const desfazerPagamento = async () => {
-    if (!selectedRun) return;
-
-    setProcessing(true);
-
-    try {
-      await deleteLedgerEntry(selectedRun.ledger_id);
-
-      const { error } = await supabase
-        .from('payroll_runs')
-        .update({
-          status: 'desfeito',
-          deleted_at: new Date().toISOString()
-        })
-        .eq('id', selectedRun.id);
-
-      if (error) throw error;
-
-      await recalcAll();
-      revalidateAfterFolha();
-      revalidateAll();
-
-      toast({
-        title: 'Sucesso',
-        description: 'Pagamento desfeito e saldos recalculados'
-      });
-
-      setUndoDialogOpen(false);
-      setSelectedRun(null);
-
-      // Se desfez SALÁRIO (dia 5), voltar para o mês da competência desfeita
-      if (selectedRun.tipo === 'SALARIO_5') {
-        // Extrair competência do payroll run (formato: yyyy-MM-dd)
-        const runCompetenciaDate = new Date(selectedRun.competencia);
-        const runCompetencia = format(runCompetenciaDate, 'yyyy-MM');
-
-        // Limpar payrollRuns ANTES de mudar competência
-        setPayrollRuns([]);
-        setCompetencia(runCompetencia);
-
-        // Aguardar um pouco e recarregar dados do mês restaurado
-        setTimeout(() => {
-          loadData();
-        }, 100);
-
-        toast({
-          title: 'Competência Restaurada',
-          description: `Voltou para ${runCompetencia}`,
-          variant: 'default'
-        });
-      } else {
-        loadData();
-      }
-    } catch (error: any) {
-      console.error('Erro ao desfazer pagamento:', error);
-      toast({
-        title: 'Erro',
-        description: error.message || 'Não foi possível desfazer o pagamento',
-        variant: 'destructive'
-      });
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const isProcessado = (tipo: TipoPagamento) => {
-    return payrollRuns.some(r => r.tipo === tipo && r.status === 'processado');
-  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -624,112 +494,41 @@ export default function MensalistasContent() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <Button
             size="lg"
-            className={isProcessado('SALARIO_5') ? 'btn-success' : 'btn-primary'}
+            className="btn-primary"
             onClick={() => abrirModalConfirmacao('SALARIO_5')}
-            disabled={isProcessado('SALARIO_5')}
           >
-            {isProcessado('SALARIO_5') ? (
-              <>
-                <Check className="w-5 h-5 mr-2" />
-                Salário Pago ✅
-              </>
-            ) : (
-              <>
-                <DollarSign className="w-5 h-5 mr-2" />
-                💸 Pagar Salário
-              </>
-            )}
+            <DollarSign className="w-5 h-5 mr-2" />
+            💸 Pagar Salário
           </Button>
 
           <Button
             size="lg"
-            className={isProcessado('VALE_20') ? 'btn-success' : 'btn-primary'}
+            className="btn-primary"
             onClick={() => abrirModalConfirmacao('VALE_20')}
-            disabled={isProcessado('VALE_20')}
           >
-            {isProcessado('VALE_20') ? (
-              <>
-                <Check className="w-5 h-5 mr-2" />
-                Vale Pago ✅
-              </>
-            ) : (
-              <>
-                <Banknote className="w-5 h-5 mr-2" />
-                💵 Pagar Vale-Salário
-              </>
-            )}
+            <Banknote className="w-5 h-5 mr-2" />
+            💵 Pagar Vale-Salário
           </Button>
 
           <Button
             size="lg"
-            className={isProcessado('VT_ULTIMO_DIA') ? 'btn-success' : 'btn-primary'}
+            className="btn-primary"
             onClick={() => abrirModalConfirmacao('VT_ULTIMO_DIA')}
-            disabled={isProcessado('VT_ULTIMO_DIA')}
           >
-            {isProcessado('VT_ULTIMO_DIA') ? (
-              <>
-                <Check className="w-5 h-5 mr-2" />
-                VT Pago ✅
-              </>
-            ) : (
-              <>
-                <Bus className="w-5 h-5 mr-2" />
-                🚎 Pagar VT
-              </>
-            )}
+            <Bus className="w-5 h-5 mr-2" />
+            🚎 Pagar VT
           </Button>
 
           <Button
             size="lg"
-            className={isProcessado('VR_ULTIMO_DIA') ? 'btn-success' : 'btn-primary'}
+            className="btn-primary"
             onClick={() => abrirModalConfirmacao('VR_ULTIMO_DIA')}
-            disabled={isProcessado('VR_ULTIMO_DIA')}
           >
-            {isProcessado('VR_ULTIMO_DIA') ? (
-              <>
-                <Check className="w-5 h-5 mr-2" />
-                VR Pago ✅
-              </>
-            ) : (
-              <>
-                <UtensilsCrossed className="w-5 h-5 mr-2" />
-                🍴 Pagar VR
-              </>
-            )}
+            <UtensilsCrossed className="w-5 h-5 mr-2" />
+            🍴 Pagar VR
           </Button>
         </div>
 
-        {payrollRuns.filter(r => r.status === 'processado').length > 0 && (
-          <Card className="bg-surface/50 p-4 mb-6 border border-gold/20">
-            <h3 className="text-sm font-semibold text-gold mb-3">Pagamentos Processados</h3>
-            <div className="space-y-2">
-              {payrollRuns.filter(r => r.status === 'processado').map((run) => (
-                <div key={run.id} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span className="text-muted">{getTipoLabel(run.tipo)}</span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-white">{run.total_funcionarios} funcionários</span>
-                    <span className="font-semibold text-gold">{formatCurrency(parseFloat(run.total_pago.toString()))}</span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7"
-                      onClick={() => {
-                        setSelectedRun(run);
-                        setUndoDialogOpen(true);
-                      }}
-                    >
-                      <Undo2 className="w-3 h-3 mr-1" />
-                      Desfazer
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
 
         <div className="overflow-x-auto">
           <table className="table-dark">
@@ -916,54 +715,6 @@ export default function MensalistasContent() {
               className="btn-primary"
             >
               {processing ? 'Processando...' : 'Confirmar Pagamento'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={undoDialogOpen} onOpenChange={setUndoDialogOpen}>
-        <DialogContent className="bg-background border-border">
-          <DialogHeader>
-            <DialogTitle className="text-gold">Desfazer Pagamento</DialogTitle>
-            <DialogDescription>
-              Esta ação irá reverter o pagamento e recalcular todos os saldos
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedRun && (
-            <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted">Tipo</p>
-                  <p className="font-medium text-white">{getTipoLabel(selectedRun.tipo)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted">Valor</p>
-                  <p className="font-medium text-white">{formatCurrency(parseFloat(selectedRun.total_pago.toString()))}</p>
-                </div>
-              </div>
-              <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
-                <p className="text-sm text-muted">
-                  <strong className="text-destructive">Atenção:</strong> O lançamento será marcado como excluído e os saldos serão recalculados.
-                </p>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setUndoDialogOpen(false)}
-              disabled={processing}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={desfazerPagamento}
-              disabled={processing}
-              className="bg-destructive hover:bg-destructive/80"
-            >
-              {processing ? 'Desfazendo...' : 'Confirmar Desfazer'}
             </Button>
           </DialogFooter>
         </DialogContent>
