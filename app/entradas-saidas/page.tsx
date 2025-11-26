@@ -8,11 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Download, Filter, TrendingUp, TrendingDown, Trash2, Edit, Eye, EyeOff, CheckSquare, Square } from 'lucide-react';
+import { Plus, Download, Upload, Filter, TrendingUp, TrendingDown, Trash2, Edit, Eye, EyeOff, CheckSquare, Square } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { recalcAll, createLedgerEntry } from '@/lib/ledger-sync';
 import { revalidateAll } from '@/lib/revalidation-utils';
+import { importBankStatement, ImportedTransaction } from '@/lib/excel-utils';
 
 interface Transaction {
   id: string;
@@ -37,6 +38,9 @@ export default function EntradasSaidasPage() {
   const [showDeleted, setShowDeleted] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importedData, setImportedData] = useState<ImportedTransaction[]>([]);
+  const [importing, setImporting] = useState(false);
   const { toast } = useToast();
 
   const [filters, setFilters] = useState({
@@ -327,6 +331,81 @@ export default function EntradasSaidasPage() {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const imported = await importBankStatement(file);
+      setImportedData(imported);
+      setImportDialogOpen(true);
+      toast({
+        title: 'Sucesso',
+        description: `${imported.length} transações encontradas no arquivo`
+      });
+    } catch (error) {
+      console.error('Erro ao importar:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível importar o arquivo. Verifique o formato.',
+        variant: 'destructive'
+      });
+    } finally {
+      setImporting(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (importedData.length === 0) return;
+
+    setImporting(true);
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const item of importedData) {
+        try {
+          await createLedgerEntry({
+            data: item.data,
+            tipo: item.tipo,
+            forma: 'banco',
+            categoria: item.categoria,
+            descricao: item.descricao,
+            valor: item.valor,
+            origem: 'importacao_extrato'
+          });
+          successCount++;
+        } catch (error) {
+          console.error('Erro ao criar transação:', error);
+          errorCount++;
+        }
+      }
+
+      await recalcAll();
+
+      toast({
+        title: 'Importação concluída',
+        description: `${successCount} transações importadas com sucesso${errorCount > 0 ? `, ${errorCount} com erro` : ''}`
+      });
+
+      setImportDialogOpen(false);
+      setImportedData([]);
+      loadTransactions();
+      revalidateAll();
+    } catch (error) {
+      console.error('Erro na importação:', error);
+      toast({
+        title: 'Erro',
+        description: 'Erro ao importar transações',
+        variant: 'destructive'
+      });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const getSubtotals = () => {
     const entradas = filteredTransactions
       .filter(t => t.tipo === 'entrada')
@@ -397,6 +476,21 @@ export default function EntradasSaidasPage() {
               <Download className="w-4 h-4 mr-2" />
               Exportar CSV
             </Button>
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleFileImport}
+                className="hidden"
+                disabled={importing}
+              />
+              <Button className="btn-secondary" disabled={importing} asChild>
+                <span>
+                  <Upload className="w-4 h-4 mr-2" />
+                  {importing ? 'Importando...' : 'Importar Excel'}
+                </span>
+              </Button>
+            </label>
             <Dialog open={dialogOpen} onOpenChange={(open) => {
               setDialogOpen(open);
               if (!open) resetForm();
@@ -778,6 +872,85 @@ export default function EntradasSaidasPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+          <DialogContent className="bg-surface border-border max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-gold">Preview da Importação</DialogTitle>
+              <DialogDescription className="text-muted">
+                Revise as {importedData.length} transações encontradas antes de importar
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-black/30">
+                    <tr>
+                      <th className="text-left p-3 text-gold">Data</th>
+                      <th className="text-left p-3 text-gold">Descrição</th>
+                      <th className="text-left p-3 text-gold">Categoria</th>
+                      <th className="text-left p-3 text-gold">Tipo</th>
+                      <th className="text-right p-3 text-gold">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importedData.map((item, index) => (
+                      <tr key={index} className="border-t border-border hover:bg-black/20">
+                        <td className="p-3">{format(new Date(item.data), 'dd/MM/yyyy')}</td>
+                        <td className="p-3 max-w-md truncate">{item.descricao}</td>
+                        <td className="p-3">{item.categoria}</td>
+                        <td className="p-3">
+                          {item.tipo === 'entrada' ? (
+                            <span className="text-green-500">Entrada</span>
+                          ) : (
+                            <span className="text-red-500">Saída</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-right">{formatCurrency(item.valor)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex gap-4 p-4 bg-black/30 rounded-lg">
+                <div className="flex-1">
+                  <p className="text-sm text-muted">Total de Entradas</p>
+                  <p className="text-xl font-bold text-green-500">
+                    {formatCurrency(importedData.filter(i => i.tipo === 'entrada').reduce((sum, i) => sum + i.valor, 0))}
+                  </p>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-muted">Total de Saídas</p>
+                  <p className="text-xl font-bold text-red-500">
+                    {formatCurrency(importedData.filter(i => i.tipo === 'saida').reduce((sum, i) => sum + i.valor, 0))}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                onClick={() => {
+                  setImportDialogOpen(false);
+                  setImportedData([]);
+                }}
+                className="btn-secondary"
+                disabled={importing}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleConfirmImport}
+                className="btn-primary"
+                disabled={importing}
+              >
+                {importing ? 'Importando...' : `Importar ${importedData.length} transações`}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

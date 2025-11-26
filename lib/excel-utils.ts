@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { format } from 'date-fns';
+import { format, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export interface ExcelColumn {
@@ -346,5 +346,141 @@ export function exportEntradasSaidas(
     filename: `${tipo}_${forma}_${new Date().getTime()}.xlsx`,
     sheetName: `${tituloTipo} ${tituloForma}`,
     totals,
+  });
+}
+
+export interface ImportedTransaction {
+  data: string;
+  descricao: string;
+  valor: number;
+  tipo: 'entrada' | 'saida';
+  categoria: string;
+  saldo?: number;
+}
+
+export function importBankStatement(file: File): Promise<ImportedTransaction[]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result;
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        const transactions: ImportedTransaction[] = [];
+        let dataRowStart = -1;
+
+        for (let i = 0; i < jsonData.length; i++) {
+          const row = jsonData[i];
+          if (row[0] === 'Data' || (typeof row[0] === 'string' && row[0].toLowerCase().includes('data'))) {
+            dataRowStart = i + 1;
+            break;
+          }
+        }
+
+        if (dataRowStart === -1) {
+          dataRowStart = 0;
+          for (let i = 0; i < jsonData.length; i++) {
+            const row = jsonData[i];
+            const firstCell = row[0];
+            if (typeof firstCell === 'string' && firstCell.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+              dataRowStart = i;
+              break;
+            }
+          }
+        }
+
+        for (let i = dataRowStart; i < jsonData.length; i++) {
+          const row = jsonData[i];
+
+          if (!row || row.length < 2) continue;
+
+          const dataStr = row[0];
+          const lancamento = row[1] || '';
+          const razaoSocial = row[2] || '';
+          const valorRaw = row[4];
+          const saldoRaw = row[5];
+
+          if (!dataStr || lancamento.toString().toLowerCase().includes('saldo total')) {
+            continue;
+          }
+
+          let dataFormatted: string;
+          try {
+            if (typeof dataStr === 'number') {
+              const jsDate = XLSX.SSF.parse_date_code(dataStr);
+              dataFormatted = format(new Date(jsDate.y, jsDate.m - 1, jsDate.d), 'yyyy-MM-dd');
+            } else if (typeof dataStr === 'string' && dataStr.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+              const parsedDate = parse(dataStr, 'dd/MM/yyyy', new Date());
+              dataFormatted = format(parsedDate, 'yyyy-MM-dd');
+            } else {
+              continue;
+            }
+          } catch {
+            continue;
+          }
+
+          let valor = 0;
+          if (typeof valorRaw === 'number') {
+            valor = Math.abs(valorRaw);
+          } else if (typeof valorRaw === 'string') {
+            const cleanValue = valorRaw.replace(/[^\d,-]/g, '').replace(',', '.');
+            valor = Math.abs(parseFloat(cleanValue) || 0);
+          }
+
+          if (valor === 0) continue;
+
+          const tipo: 'entrada' | 'saida' = (typeof valorRaw === 'number' && valorRaw > 0) ||
+                                            (typeof valorRaw === 'string' && !valorRaw.includes('-'))
+            ? 'entrada'
+            : 'saida';
+
+          const descricaoCompleta = razaoSocial
+            ? `${lancamento} - ${razaoSocial}`.substring(0, 200)
+            : lancamento.substring(0, 200);
+
+          let categoria = 'Outros';
+          const lancamentoLower = lancamento.toLowerCase();
+          if (lancamentoLower.includes('pix')) {
+            categoria = 'PIX';
+          } else if (lancamentoLower.includes('ted') || lancamentoLower.includes('transferencia')) {
+            categoria = 'Transferência';
+          } else if (lancamentoLower.includes('sispag') || lancamentoLower.includes('fornecedor')) {
+            categoria = 'Fornecedores';
+          } else if (lancamentoLower.includes('recebimento') || lancamentoLower.includes('receita')) {
+            categoria = 'Receitas';
+          } else if (lancamentoLower.includes('rendimento')) {
+            categoria = 'Rendimentos';
+          }
+
+          let saldo: number | undefined;
+          if (typeof saldoRaw === 'number') {
+            saldo = saldoRaw;
+          } else if (typeof saldoRaw === 'string') {
+            const cleanSaldo = saldoRaw.replace(/[^\d,-]/g, '').replace(',', '.');
+            saldo = parseFloat(cleanSaldo) || undefined;
+          }
+
+          transactions.push({
+            data: dataFormatted,
+            descricao: descricaoCompleta,
+            valor,
+            tipo,
+            categoria,
+            saldo,
+          });
+        }
+
+        resolve(transactions);
+      } catch (error) {
+        reject(error);
+      }
+    };
+
+    reader.onerror = () => reject(new Error('Erro ao ler arquivo'));
+    reader.readAsBinaryString(file);
   });
 }
