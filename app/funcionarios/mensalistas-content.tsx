@@ -24,6 +24,7 @@ interface Mensalista {
   funcao: string;
   salario_base: number;
   ajuda_custo: number;
+  vale_salario?: number;
   recebe_vt: boolean;
   vt_valor_unitario_dia: number;
   vt_dias_uteis_override: number;
@@ -73,6 +74,7 @@ export default function MensalistasContent() {
     funcao: '',
     salario_base: '',
     ajuda_custo: '0',
+    vale_salario: '0',
     recebe_vt: false,
     vt_valor_unitario_dia: '0',
     vt_dias_uteis_override: '22',
@@ -184,7 +186,7 @@ export default function MensalistasContent() {
         valor = parseFloat(m.salario_base?.toString() || '0') +
                 parseFloat(m.ajuda_custo?.toString() || '0');
       } else if (tipo === 'VALE_20') {
-        valor = 0;
+        valor = parseFloat(m.vale_salario?.toString() || '0');
       } else if (tipo === 'VT_ULTIMO_DIA') {
         if (m.recebe_vt) {
           valor = calcularVTMensal(m);
@@ -215,7 +217,7 @@ export default function MensalistasContent() {
         valor = parseFloat(m.salario_base?.toString() || '0') +
                 parseFloat(m.ajuda_custo?.toString() || '0');
       } else if (tipo === 'VALE_20') {
-        valor = 0;
+        valor = parseFloat(m.vale_salario?.toString() || '0');
       } else if (tipo === 'VT_ULTIMO_DIA') {
         if (m.recebe_vt) {
           valor = calcularVTMensal(m);
@@ -391,6 +393,7 @@ export default function MensalistasContent() {
       funcao: '',
       salario_base: '',
       ajuda_custo: '0',
+      vale_salario: '0',
       recebe_vt: false,
       vt_valor_unitario_dia: '0',
       vt_dias_uteis_override: '22',
@@ -408,6 +411,7 @@ export default function MensalistasContent() {
       funcao: mensalista.funcao,
       salario_base: mensalista.salario_base.toString(),
       ajuda_custo: mensalista.ajuda_custo.toString(),
+      vale_salario: (mensalista.vale_salario || 0).toString(),
       recebe_vt: mensalista.recebe_vt,
       vt_valor_unitario_dia: mensalista.vt_valor_unitario_dia.toString(),
       vt_dias_uteis_override: mensalista.vt_dias_uteis_override.toString(),
@@ -437,6 +441,7 @@ export default function MensalistasContent() {
         funcao: formData.funcao,
         salario_base: parseFloat(formData.salario_base),
         ajuda_custo: parseFloat(formData.ajuda_custo || '0'),
+        vale_salario: parseFloat(formData.vale_salario || '0'),
         recebe_vt: formData.recebe_vt,
         vt_valor_unitario_dia: parseFloat(formData.vt_valor_unitario_dia || '0'),
         vt_dias_uteis_override: parseInt(formData.vt_dias_uteis_override || '22'),
@@ -675,6 +680,7 @@ export default function MensalistasContent() {
                 <th className="text-left">Cargo</th>
                 <th className="text-right">Salário</th>
                 <th className="text-right">Ajuda Custo</th>
+                <th className="text-right">Vale-Salário</th>
                 <th className="text-right">VT Mensal</th>
                 <th className="text-right">VR Mensal</th>
                 <th className="text-right">Total</th>
@@ -684,7 +690,7 @@ export default function MensalistasContent() {
             <tbody>
               {mensalistas.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-muted py-8">
+                  <td colSpan={9} className="text-center text-muted py-8">
                     Nenhum funcionário cadastrado
                   </td>
                 </tr>
@@ -699,6 +705,7 @@ export default function MensalistasContent() {
                       <td className="text-muted">{mensalista.funcao}</td>
                       <td className="text-right">{formatCurrency(parseFloat(mensalista.salario_base?.toString() || '0'))}</td>
                       <td className="text-right">{formatCurrency(parseFloat(mensalista.ajuda_custo?.toString() || '0'))}</td>
+                      <td className="text-right">{formatCurrency(parseFloat(mensalista.vale_salario?.toString() || '0'))}</td>
                       <td className="text-right">{formatCurrency(vtMensal)}</td>
                       <td className="text-right">{formatCurrency(parseFloat(mensalista.vale_refeicao_total_calculado?.toString() || '0'))}</td>
                       <td className="text-right font-semibold text-gold">{formatCurrency(custoTotal)}</td>
@@ -735,6 +742,9 @@ export default function MensalistasContent() {
                 </td>
                 <td className="text-right font-semibold">
                   {formatCurrency(mensalistas.reduce((sum, m) => sum + parseFloat(m.ajuda_custo?.toString() || '0'), 0))}
+                </td>
+                <td className="text-right font-semibold">
+                  {formatCurrency(mensalistas.reduce((sum, m) => sum + parseFloat(m.vale_salario?.toString() || '0'), 0))}
                 </td>
                 <td className="text-right font-semibold">
                   {formatCurrency(mensalistas.reduce((sum, m) => sum + calcularVTMensal(m), 0))}
@@ -982,6 +992,22 @@ export default function MensalistasContent() {
                   className="input-dark"
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="vale_salario" className="text-gold">Vale-Salário (dia 20)</Label>
+                <Input
+                  id="vale_salario"
+                  type="number"
+                  step="0.01"
+                  value={formData.vale_salario}
+                  onChange={(e) => setFormData({ ...formData, vale_salario: e.target.value })}
+                  placeholder="0.00"
+                  className="input-dark"
+                />
+                <p className="text-xs text-muted">Valor pago antecipadamente no dia 20</p>
+              </div>
+
+              <div className="col-span-2"></div>
 
             </div>
 
