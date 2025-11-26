@@ -260,7 +260,14 @@ export default function MensalistasContent() {
     const [ano, mes] = competencia.split('-');
     const diaOriginal = tipo === 'SALARIO_5' ? 5 : tipo === 'VALE_20' ? 20 : new Date(parseInt(ano), parseInt(mes), 0).getDate();
     const dataOriginal = new Date(parseInt(ano), parseInt(mes) - 1, diaOriginal);
+
+    console.log('abrirModalConfirmacao - Tipo:', tipo);
+    console.log('abrirModalConfirmacao - Data original:', format(dataOriginal, 'dd/MM/yyyy'));
+
     const dataPagamento = await getDataPagamento(tipo);
+
+    console.log('abrirModalConfirmacao - Data pagamento retornada:', format(dataPagamento, 'dd/MM/yyyy'));
+    console.log('abrirModalConfirmacao - Datas são iguais?', dataPagamento.getTime() === dataOriginal.getTime());
 
     setModalData({
       tipo,
