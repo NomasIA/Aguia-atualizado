@@ -93,8 +93,11 @@ export async function isDiaUtil(date: Date): Promise<boolean> {
 }
 
 /**
- * Adjust date to next business day if it falls on weekend or holiday
- * Uses Brazilian banking calendar
+ * Adjust date to business day considering weekends and holidays
+ * Uses Brazilian banking calendar rules:
+ * - Saturday: moves to Friday (previous business day)
+ * - Sunday: moves to Monday (next business day)
+ * - Holiday: moves to previous business day
  *
  * @param date - Original date (string or Date)
  * @param tipo_operacao - Operation type ('pagamento' or 'recebimento')
@@ -104,28 +107,33 @@ export async function ajustarDataUtil(
   date: string | Date,
   tipo_operacao: 'pagamento' | 'recebimento' = 'pagamento'
 ): Promise<string> {
-  // Parse date in America/Sao_Paulo timezone
   let currentDate = typeof date === 'string' ? new Date(date + 'T12:00:00-03:00') : new Date(date);
 
-  // Load holidays cache
   await loadFeriados();
 
-  let maxIterations = 10; // Prevent infinite loop
-  while (maxIterations > 0) {
-    const isUtil = await isDiaUtil(currentDate);
+  const dayOfWeek = currentDate.getDay();
 
-    if (isUtil) {
-      // Found business day
-      break;
-    }
-
-    // Move to next day
-    currentDate.setDate(currentDate.getDate() + 1);
-    maxIterations--;
+  if (dayOfWeek === 6) {
+    currentDate.setDate(currentDate.getDate() - 1);
+    return currentDate.toISOString().split('T')[0];
   }
 
-  if (maxIterations === 0) {
-    console.error('Failed to find business day within 10 iterations');
+  if (dayOfWeek === 0) {
+    currentDate.setDate(currentDate.getDate() + 1);
+    return currentDate.toISOString().split('T')[0];
+  }
+
+  const holiday = await isFeriado(currentDate);
+  if (holiday) {
+    let maxIterations = 10;
+    while (maxIterations > 0) {
+      currentDate.setDate(currentDate.getDate() - 1);
+      const isUtil = await isDiaUtil(currentDate);
+      if (isUtil) {
+        break;
+      }
+      maxIterations--;
+    }
   }
 
   return currentDate.toISOString().split('T')[0];
