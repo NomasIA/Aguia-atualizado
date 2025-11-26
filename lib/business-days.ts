@@ -49,32 +49,31 @@ function adjustToBusinessDayFallback(
 ): Date {
   let adjusted = new Date(date);
   let dayOfWeek = getDay(adjusted);
+
+  if (dayOfWeek === 6) {
+    adjusted.setDate(adjusted.getDate() - 1);
+    return adjusted;
+  }
+
+  if (dayOfWeek === 0) {
+    adjusted.setDate(adjusted.getDate() + 1);
+    return adjusted;
+  }
+
   let iterations = 0;
   const maxIterations = 10;
 
   while (iterations < maxIterations) {
+    if (direction === 'before') {
+      adjusted.setDate(adjusted.getDate() - 1);
+    } else {
+      adjusted.setDate(adjusted.getDate() + 1);
+    }
+
     dayOfWeek = getDay(adjusted);
 
     if (dayOfWeek !== 0 && dayOfWeek !== 6) {
       return adjusted;
-    }
-
-    if (direction === 'before') {
-      if (dayOfWeek === 0) {
-        adjusted.setDate(adjusted.getDate() - 2);
-      } else if (dayOfWeek === 6) {
-        adjusted.setDate(adjusted.getDate() - 1);
-      } else {
-        adjusted.setDate(adjusted.getDate() - 1);
-      }
-    } else {
-      if (dayOfWeek === 6) {
-        adjusted.setDate(adjusted.getDate() + 2);
-      } else if (dayOfWeek === 0) {
-        adjusted.setDate(adjusted.getDate() + 1);
-      } else {
-        adjusted.setDate(adjusted.getDate() + 1);
-      }
     }
 
     iterations++;
