@@ -342,7 +342,9 @@ export default function MensalistasContent() {
       // Se pagou SALÁRIO (dia 5), avançar para o próximo mês
       if (modalData.tipo === 'SALARIO_5') {
         const [ano, mes] = competencia.split('-');
-        const proximaData = new Date(parseInt(ano), parseInt(mes), 1); // Próximo mês
+        // Criar data do mês atual e adicionar 1 mês
+        const dataAtual = new Date(parseInt(ano), parseInt(mes) - 1, 1);
+        const proximaData = new Date(dataAtual.getFullYear(), dataAtual.getMonth() + 1, 1);
         const proximaCompetencia = format(proximaData, 'yyyy-MM');
         setCompetencia(proximaCompetencia);
         toast({
