@@ -346,7 +346,16 @@ export default function MensalistasContent() {
         const dataAtual = new Date(parseInt(ano), parseInt(mes) - 1, 1);
         const proximaData = new Date(dataAtual.getFullYear(), dataAtual.getMonth() + 1, 1);
         const proximaCompetencia = format(proximaData, 'yyyy-MM');
+
+        // Limpar payrollRuns ANTES de mudar competência para liberar os botões imediatamente
+        setPayrollRuns([]);
         setCompetencia(proximaCompetencia);
+
+        // Aguardar um pouco e recarregar dados do novo mês
+        setTimeout(() => {
+          loadData();
+        }, 100);
+
         toast({
           title: 'Competência Atualizada',
           description: `Avançado para ${proximaCompetencia}`,
@@ -403,7 +412,15 @@ export default function MensalistasContent() {
         const runCompetenciaDate = new Date(selectedRun.competencia);
         const runCompetencia = format(runCompetenciaDate, 'yyyy-MM');
 
+        // Limpar payrollRuns ANTES de mudar competência
+        setPayrollRuns([]);
         setCompetencia(runCompetencia);
+
+        // Aguardar um pouco e recarregar dados do mês restaurado
+        setTimeout(() => {
+          loadData();
+        }, 100);
+
         toast({
           title: 'Competência Restaurada',
           description: `Voltou para ${runCompetencia}`,
