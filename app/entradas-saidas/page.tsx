@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Download, Filter, TrendingUp, TrendingDown, Trash2, Edit, Eye, EyeOff } from 'lucide-react';
+import { Plus, Download, Filter, TrendingUp, TrendingDown, Trash2, Edit, Eye, EyeOff, CheckSquare, Square } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { recalcAll, createLedgerEntry } from '@/lib/ledger-sync';
@@ -35,6 +35,8 @@ export default function EntradasSaidasPage() {
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [showDeleted, setShowDeleted] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const [filters, setFilters] = useState({
@@ -263,6 +265,64 @@ export default function EntradasSaidasPage() {
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+
+    try {
+      const idsArray = Array.from(selectedIds);
+      console.log(`Excluindo ${idsArray.length} transações...`);
+
+      // Soft delete: set deleted_at timestamp para todas as selecionadas
+      const { error } = await supabase
+        .from('cash_ledger')
+        .update({ deleted_at: new Date().toISOString() })
+        .in('id', idsArray);
+
+      if (error) throw error;
+
+      // Recalcular tudo e atualizar saldos
+      await recalcAll();
+
+      toast({
+        title: 'Sucesso',
+        description: `${idsArray.length} transação(ões) excluída(s). Saldos recalculados.`
+      });
+
+      setBulkDeleteDialogOpen(false);
+      setSelectedIds(new Set());
+      loadTransactions();
+
+      // Trigger global revalidation
+      revalidateAll();
+    } catch (error) {
+      console.error('Erro ao excluir transações:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível excluir as transações',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const toggleSelection = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredTransactions.filter(t => !t.deleted_at).length) {
+      setSelectedIds(new Set());
+    } else {
+      const allIds = new Set(filteredTransactions.filter(t => !t.deleted_at).map(t => t.id));
+      setSelectedIds(allIds);
+    }
+  };
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
@@ -316,6 +376,15 @@ export default function EntradasSaidasPage() {
             <p className="text-muted">Histórico completo de transações financeiras</p>
           </div>
           <div className="flex gap-3">
+            {selectedIds.size > 0 && (
+              <Button
+                onClick={() => setBulkDeleteDialogOpen(true)}
+                className="btn-danger bg-danger hover:bg-danger/80"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Excluir {selectedIds.size} selecionada{selectedIds.size > 1 ? 's' : ''}
+              </Button>
+            )}
             <Button
               onClick={() => setShowDeleted(!showDeleted)}
               className="btn-secondary"
@@ -546,6 +615,21 @@ export default function EntradasSaidasPage() {
             <table className="table-dark">
               <thead>
                 <tr>
+                  <th className="w-12">
+                    {!showDeleted && (
+                      <button
+                        onClick={toggleSelectAll}
+                        className="text-gold hover:text-gold/80"
+                        title="Selecionar todos"
+                      >
+                        {selectedIds.size === filteredTransactions.filter(t => !t.deleted_at).length && filteredTransactions.filter(t => !t.deleted_at).length > 0 ? (
+                          <CheckSquare className="w-5 h-5" />
+                        ) : (
+                          <Square className="w-5 h-5" />
+                        )}
+                      </button>
+                    )}
+                  </th>
                   <th>Data</th>
                   <th>Tipo</th>
                   <th>Forma</th>
@@ -558,13 +642,27 @@ export default function EntradasSaidasPage() {
               <tbody>
                 {filteredTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center text-muted py-8">
+                    <td colSpan={8} className="text-center text-muted py-8">
                       Nenhuma transação encontrada
                     </td>
                   </tr>
                 ) : (
                   filteredTransactions.map((transaction) => (
                     <tr key={transaction.id} className={transaction.deleted_at ? 'opacity-50' : ''}>
+                      <td>
+                        {!transaction.deleted_at && (
+                          <button
+                            onClick={() => toggleSelection(transaction.id)}
+                            className="text-gold hover:text-gold/80"
+                          >
+                            {selectedIds.has(transaction.id) ? (
+                              <CheckSquare className="w-5 h-5" />
+                            ) : (
+                              <Square className="w-5 h-5" />
+                            )}
+                          </button>
+                        )}
+                      </td>
                       <td>{format(new Date(transaction.data + 'T00:00:00'), 'dd/MM/yyyy')}</td>
                       <td>
                         {transaction.tipo === 'entrada' ? (
@@ -645,6 +743,37 @@ export default function EntradasSaidasPage() {
               <AlertDialogCancel className="btn-secondary">Cancelar</AlertDialogCancel>
               <AlertDialogAction onClick={handleDelete} className="btn-danger bg-danger hover:bg-danger/80">
                 Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+          <AlertDialogContent className="bg-surface border-border">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-gold">Excluir Múltiplas Transações</AlertDialogTitle>
+              <AlertDialogDescription className="text-muted">
+                Tem certeza que deseja excluir {selectedIds.size} transação(ões) selecionada(s)? Esta ação irá atualizar os saldos de Banco e Caixa imediatamente.
+                <div className="mt-4 p-3 bg-black/30 rounded border border-border">
+                  <p className="font-semibold mb-2">Transações selecionadas:</p>
+                  <ul className="text-sm space-y-1 max-h-48 overflow-y-auto">
+                    {Array.from(selectedIds).map(id => {
+                      const transaction = filteredTransactions.find(t => t.id === id);
+                      if (!transaction) return null;
+                      return (
+                        <li key={id}>
+                          {format(new Date(transaction.data + 'T00:00:00'), 'dd/MM/yyyy')} - {transaction.descricao} - {formatCurrency(transaction.valor)}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="btn-secondary">Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleBulkDelete} className="btn-danger bg-danger hover:bg-danger/80">
+                Excluir {selectedIds.size} transação(ões)
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
