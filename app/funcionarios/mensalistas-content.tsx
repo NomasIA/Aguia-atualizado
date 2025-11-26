@@ -63,6 +63,7 @@ export default function MensalistasContent() {
   const [processing, setProcessing] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalData, setModalData] = useState<ModalData | null>(null);
+  const [dataPagamentoSelecionada, setDataPagamentoSelecionada] = useState('');
   const [undoDialogOpen, setUndoDialogOpen] = useState(false);
   const [selectedRun, setSelectedRun] = useState<PayrollRun | null>(null);
   const [cadastroDialogOpen, setCadastroDialogOpen] = useState(false);
@@ -262,27 +263,15 @@ export default function MensalistasContent() {
       return;
     }
 
-    const [ano, mes] = competencia.split('-');
-    const diaOriginal = tipo === 'SALARIO_5' ? 5 : tipo === 'VALE_20' ? 20 : new Date(parseInt(ano), parseInt(mes), 0).getDate();
-    const dataOriginal = new Date(parseInt(ano), parseInt(mes) - 1, diaOriginal);
-
-    console.log('abrirModalConfirmacao - Tipo:', tipo);
-    console.log('abrirModalConfirmacao - Data original:', format(dataOriginal, 'dd/MM/yyyy'));
-    console.log('abrirModalConfirmacao - Data original ISO:', format(dataOriginal, 'yyyy-MM-dd'));
-
-    const dataPagamento = await getDataPagamento(tipo);
-
-    console.log('abrirModalConfirmacao - Data pagamento retornada:', format(dataPagamento, 'dd/MM/yyyy'));
-    console.log('abrirModalConfirmacao - Data pagamento ISO:', format(dataPagamento, 'yyyy-MM-dd'));
-    console.log('abrirModalConfirmacao - Datas são iguais?', dataPagamento.getTime() === dataOriginal.getTime());
+    // Definir data padrão como hoje
+    const hoje = new Date();
+    setDataPagamentoSelecionada(format(hoje, 'yyyy-MM-dd'));
 
     setModalData({
       tipo,
       totalFuncionarios: count,
       totalPagar: total,
-      detalhes,
-      dataPagamento,
-      dataOriginal
+      detalhes
     });
     setModalOpen(true);
   };
@@ -290,11 +279,19 @@ export default function MensalistasContent() {
   const processarPagamento = async () => {
     if (!modalData) return;
 
+    if (!dataPagamentoSelecionada) {
+      toast({
+        title: 'Erro',
+        description: 'Por favor, selecione a data do pagamento',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     setProcessing(true);
 
     try {
       const competenciaDate = startOfMonth(new Date(competencia + '-01'));
-      const dataPagamento = await getDataPagamento(modalData.tipo);
 
       const descricao = `Folha Mensalistas • ${getTipoLabel(modalData.tipo)} • ${competencia}`;
       const categoria = modalData.tipo === 'SALARIO_5' ? 'salario' :
@@ -302,7 +299,7 @@ export default function MensalistasContent() {
                        modalData.tipo === 'VT_ULTIMO_DIA' ? 'vt' : 'vale_refeicao';
 
       const ledger = await createLedgerEntry({
-        data: format(dataPagamento, 'yyyy-MM-dd'),
+        data: dataPagamentoSelecionada,
         tipo: 'saida',
         forma: 'banco',
         categoria,
@@ -639,7 +636,7 @@ export default function MensalistasContent() {
             ) : (
               <>
                 <DollarSign className="w-5 h-5 mr-2" />
-                💸 Pagar Salário (dia 5)
+                💸 Pagar Salário
               </>
             )}
           </Button>
@@ -658,7 +655,7 @@ export default function MensalistasContent() {
             ) : (
               <>
                 <Banknote className="w-5 h-5 mr-2" />
-                💵 Pagar Vale-Salário (dia 20)
+                💵 Pagar Vale-Salário
               </>
             )}
           </Button>
@@ -677,7 +674,7 @@ export default function MensalistasContent() {
             ) : (
               <>
                 <Bus className="w-5 h-5 mr-2" />
-                🚎 Pagar VT (último dia útil)
+                🚎 Pagar VT
               </>
             )}
           </Button>
@@ -696,7 +693,7 @@ export default function MensalistasContent() {
             ) : (
               <>
                 <UtensilsCrossed className="w-5 h-5 mr-2" />
-                🍴 Pagar VR (último dia útil)
+                🍴 Pagar VR
               </>
             )}
           </Button>
@@ -870,41 +867,19 @@ export default function MensalistasContent() {
                 </div>
               </div>
 
-              {modalData.dataPagamento && modalData.dataOriginal && (
-                <div className="bg-gold/10 border border-gold/20 rounded-lg p-3">
-                  <p className="text-sm font-semibold text-gold mb-2">Data de Pagamento</p>
-                  <div className="space-y-1 text-sm">
-                    {modalData.dataPagamento.getTime() === modalData.dataOriginal.getTime() ? (
-                      <div className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-green-500" />
-                        <span className="text-white font-medium">
-                          {format(modalData.dataPagamento, 'dd/MM/yyyy (EEEE)', { locale: ptBR })}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <AlertCircle className="w-4 h-4 text-orange-500" />
-                          <span className="text-muted">
-                            Data original: {format(modalData.dataOriginal, 'dd/MM/yyyy (EEEE)', { locale: ptBR })}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Check className="w-4 h-4 text-green-500" />
-                          <span className="text-white font-medium">
-                            Data ajustada: {format(modalData.dataPagamento, 'dd/MM/yyyy (EEEE)', { locale: ptBR })}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted italic ml-6">
-                          {getDay(modalData.dataOriginal) === 6 && 'Ajustado: Sábado → Sexta-feira anterior'}
-                          {getDay(modalData.dataOriginal) === 0 && 'Ajustado: Domingo → Segunda-feira'}
-                          {getDay(modalData.dataOriginal) !== 0 && getDay(modalData.dataOriginal) !== 6 && 'Ajustado: Feriado → Dia útil anterior'}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+              <div className="bg-gold/10 border border-gold/20 rounded-lg p-3">
+                <Label htmlFor="dataPagamento" className="text-sm font-semibold text-gold mb-2 block">
+                  Data de Pagamento
+                </Label>
+                <Input
+                  id="dataPagamento"
+                  type="date"
+                  value={dataPagamentoSelecionada}
+                  onChange={(e) => setDataPagamentoSelecionada(e.target.value)}
+                  className="bg-background border-gold/20 text-white"
+                  required
+                />
+              </div>
 
               <div className="border-t border-border pt-4">
                 <p className="text-sm text-muted mb-2">Detalhamento:</p>
