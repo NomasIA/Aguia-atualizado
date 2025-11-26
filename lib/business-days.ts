@@ -29,16 +29,27 @@ export async function adjustToBusinessDay(
   direction: 'before' | 'after' = 'before'
 ): Promise<Date> {
   try {
+    const formattedDate = format(date, 'yyyy-MM-dd');
+    console.log('adjustToBusinessDay - Chamando RPC com:', formattedDate, direction);
+
     const { data, error } = await supabase
       .rpc('adjust_to_business_day', {
-        original_date: format(date, 'yyyy-MM-dd'),
+        original_date: formattedDate,
         direction
       });
 
-    if (error) throw error;
-    return new Date(data);
+    if (error) {
+      console.error('adjustToBusinessDay - RPC error:', error);
+      throw error;
+    }
+
+    console.log('adjustToBusinessDay - RPC retornou:', data);
+    const resultDate = new Date(data);
+    console.log('adjustToBusinessDay - Date convertida:', format(resultDate, 'dd/MM/yyyy'));
+    return resultDate;
   } catch (error) {
-    console.error('Erro ao ajustar data:', error);
+    console.error('adjustToBusinessDay - ERRO FATAL:', error);
+    console.error('adjustToBusinessDay - Usando fallback (NÃO verifica feriados!)');
     return adjustToBusinessDayFallback(date, direction);
   }
 }
