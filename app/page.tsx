@@ -173,22 +173,22 @@ export default function HomePage() {
             </CardContent>
           </Card>
 
-          <Card className={`card border-l-4 ${kpis && parseFloat(kpis.lucro_operacional.toString()) >= 0 ? 'border-l-emerald-500' : 'border-l-red-500'}`}>
+          <Card className={`card border-l-4 ${kpis && parseFloat(kpis.lucro_operacional.toString()) >= 0 ? 'border-l-emerald-500 dark:border-l-emerald-400' : 'border-l-red-500 dark:border-l-red-400'}`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-slate-600">Lucro Operacional</CardTitle>
-              <div className={`p-2 rounded-lg ${kpis && parseFloat(kpis.lucro_operacional.toString()) >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+              <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">Lucro Operacional</CardTitle>
+              <div className={`p-2 rounded-lg ${kpis && parseFloat(kpis.lucro_operacional.toString()) >= 0 ? 'bg-emerald-50 dark:bg-emerald-900/30' : 'bg-red-50 dark:bg-red-900/30'}`}>
                 {kpis && parseFloat(kpis.lucro_operacional.toString()) >= 0 ? (
-                  <TrendingUp className="h-5 w-5 text-emerald-600" />
+                  <TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                 ) : (
-                  <TrendingDown className="h-5 w-5 text-red-600" />
+                  <TrendingDown className="h-5 w-5 text-red-600 dark:text-red-400" />
                 )}
               </div>
             </CardHeader>
             <CardContent>
-              <div className={`text-3xl font-bold ${kpis && parseFloat(kpis.lucro_operacional.toString()) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              <div className={`text-3xl font-bold ${kpis && parseFloat(kpis.lucro_operacional.toString()) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                 {kpis ? formatCurrency(parseFloat(kpis.lucro_operacional.toString())) : 'R$ 0,00'}
               </div>
-              <p className="text-sm text-slate-500 mt-2">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
                 Margem: {margemOperacional.toFixed(1)}%
               </p>
             </CardContent>
@@ -198,15 +198,15 @@ export default function HomePage() {
         <div className="grid gap-6 md:grid-cols-2">
           <Card className="card">
             <CardHeader>
-              <CardTitle className="text-slate-900 text-xl font-bold">Entradas vs Saídas</CardTitle>
-              <p className="text-sm text-slate-500 mt-1">Análise de movimentações financeiras</p>
+              <CardTitle className="text-slate-900 dark:text-white text-xl font-bold">Entradas vs Saídas</CardTitle>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Análise de movimentações financeiras</p>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="name" stroke="#64748b" style={{ fontSize: '12px' }} />
-                  <YAxis stroke="#64748b" style={{ fontSize: '12px' }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" className="dark:stroke-slate-700" />
+                  <XAxis dataKey="name" stroke="#64748b" className="dark:stroke-slate-400" style={{ fontSize: '12px' }} />
+                  <YAxis stroke="#64748b" className="dark:stroke-slate-400" style={{ fontSize: '12px' }} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: '#ffffff',
@@ -221,28 +221,28 @@ export default function HomePage() {
                 </BarChart>
               </ResponsiveContainer>
               <div className="grid grid-cols-2 gap-4 mt-6">
-                <div className="flex items-start gap-3 p-4 bg-green-50 rounded-lg border border-green-200">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <ArrowUpRight className="w-5 h-5 text-green-600" />
+                <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                  <div className="p-2 bg-green-100 dark:bg-green-900/40 rounded-lg">
+                    <ArrowUpRight className="w-5 h-5 text-green-600 dark:text-green-400" />
                   </div>
                   <div>
-                    <p className="text-sm text-slate-600 font-medium">Entradas</p>
-                    <p className="text-xl font-bold text-slate-900 mt-1">
+                    <p className="text-sm text-slate-600 dark:text-slate-300 font-medium">Entradas</p>
+                    <p className="text-xl font-bold text-slate-900 dark:text-white mt-1">
                       {kpis ? formatCurrency(parseFloat(kpis.total_entradas.toString())) : 'R$ 0,00'}
                     </p>
-                    <p className="text-xs text-slate-500 mt-1">{kpis?.count_entradas || 0} movimentações</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{kpis?.count_entradas || 0} movimentações</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-4 bg-red-50 rounded-lg border border-red-200">
-                  <div className="p-2 bg-red-100 rounded-lg">
-                    <ArrowDownRight className="w-5 h-5 text-red-600" />
+                <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                  <div className="p-2 bg-red-100 dark:bg-red-900/40 rounded-lg">
+                    <ArrowDownRight className="w-5 h-5 text-red-600 dark:text-red-400" />
                   </div>
                   <div>
-                    <p className="text-sm text-slate-600 font-medium">Saídas</p>
-                    <p className="text-xl font-bold text-slate-900 mt-1">
+                    <p className="text-sm text-slate-600 dark:text-slate-300 font-medium">Saídas</p>
+                    <p className="text-xl font-bold text-slate-900 dark:text-white mt-1">
                       {kpis ? formatCurrency(parseFloat(kpis.total_saidas.toString())) : 'R$ 0,00'}
                     </p>
-                    <p className="text-xs text-slate-500 mt-1">{kpis?.count_saidas || 0} movimentações</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{kpis?.count_saidas || 0} movimentações</p>
                   </div>
                 </div>
               </div>
@@ -251,53 +251,53 @@ export default function HomePage() {
 
           <Card className="card">
             <CardHeader>
-              <CardTitle className="text-slate-900 text-xl font-bold flex items-center gap-2">
-                <Activity className="w-6 h-6 text-blue-600" />
+              <CardTitle className="text-slate-900 dark:text-white text-xl font-bold flex items-center gap-2">
+                <Activity className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                 Últimas Movimentações
               </CardTitle>
-              <p className="text-sm text-slate-500 mt-1">Histórico recente de transações</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Histórico recente de transações</p>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 {ultimas.length === 0 ? (
                   <div className="text-center py-12">
-                    <div className="inline-flex p-4 bg-slate-100 rounded-full mb-3">
+                    <div className="inline-flex p-4 bg-slate-100 dark:bg-slate-700 rounded-full mb-3">
                       <Activity className="w-8 h-8 text-slate-400" />
                     </div>
-                    <p className="text-slate-500 font-medium">Nenhuma movimentação registrada</p>
+                    <p className="text-slate-500 dark:text-slate-400 font-medium">Nenhuma movimentação registrada</p>
                   </div>
                 ) : (
                   ultimas.map((mov) => (
                     <div
                       key={mov.id}
-                      className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200 hover:border-blue-300 hover:shadow-sm transition-all"
+                      className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-sm transition-all"
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`p-2.5 rounded-lg ${mov.tipo === 'entrada' ? 'bg-green-100' : 'bg-red-100'}`}>
+                        <div className={`p-2.5 rounded-lg ${mov.tipo === 'entrada' ? 'bg-green-100 dark:bg-green-900/40' : 'bg-red-100 dark:bg-red-900/40'}`}>
                           {mov.tipo === 'entrada' ? (
-                            <ArrowUpRight className="w-5 h-5 text-green-600" />
+                            <ArrowUpRight className="w-5 h-5 text-green-600 dark:text-green-400" />
                           ) : (
-                            <ArrowDownRight className="w-5 h-5 text-red-600" />
+                            <ArrowDownRight className="w-5 h-5 text-red-600 dark:text-red-400" />
                           )}
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-slate-900">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white">
                             {mov.descricao || mov.categoria || mov.origem || 'Sem descrição'}
                           </p>
-                          <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+                          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-1">
                             <span className="font-medium">{format(new Date(mov.data), 'dd/MM/yyyy', { locale: ptBR })}</span>
                             <span>•</span>
                             <span className="capitalize font-medium">{mov.forma}</span>
                             {mov.conciliado && (
                               <>
                                 <span>•</span>
-                                <span className="text-green-600 font-semibold">✓ Conciliado</span>
+                                <span className="text-green-600 dark:text-green-400 font-semibold">✓ Conciliado</span>
                               </>
                             )}
                           </div>
                         </div>
                       </div>
-                      <div className={`text-right ${mov.tipo === 'entrada' ? 'text-green-600' : 'text-red-600'} font-bold text-base`}>
+                      <div className={`text-right ${mov.tipo === 'entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'} font-bold text-base`}>
                         {mov.tipo === 'entrada' ? '+' : '-'}{formatCurrency(parseFloat(mov.valor.toString()))}
                       </div>
                     </div>
@@ -305,15 +305,15 @@ export default function HomePage() {
                 )}
               </div>
               {ultimas.length > 0 && (
-                <div className="mt-6 pt-6 border-t border-slate-200">
+                <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
-                      <p className="text-xs text-slate-600 font-medium mb-1">Conciliadas</p>
-                      <p className="text-2xl font-bold text-green-600">{kpis?.count_conciliados || 0}</p>
+                    <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                      <p className="text-xs text-slate-600 dark:text-slate-300 font-medium mb-1">Conciliadas</p>
+                      <p className="text-2xl font-bold text-green-600 dark:text-green-400">{kpis?.count_conciliados || 0}</p>
                     </div>
-                    <div className="text-center p-4 bg-orange-50 rounded-lg border border-orange-200">
-                      <p className="text-xs text-slate-600 font-medium mb-1">Pendentes</p>
-                      <p className="text-2xl font-bold text-orange-600">{kpis?.count_pendentes || 0}</p>
+                    <div className="text-center p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                      <p className="text-xs text-slate-600 dark:text-slate-300 font-medium mb-1">Pendentes</p>
+                      <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{kpis?.count_pendentes || 0}</p>
                     </div>
                   </div>
                 </div>
@@ -323,7 +323,7 @@ export default function HomePage() {
         </div>
 
         {kpis?.ultima_atualizacao && (
-          <div className="text-center text-sm text-slate-500 bg-white rounded-lg p-4 border border-slate-200">
+          <div className="text-center text-sm text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
             Última atualização: {format(new Date(kpis.ultima_atualizacao), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
           </div>
         )}
