@@ -39,21 +39,21 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gold text-lg">Carregando...</div>
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="text-blue-600 text-lg font-semibold">Carregando...</div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="w-64 bg-surface/40 backdrop-blur-xl border-r border-border flex flex-col">
-        <div className="p-6 border-b border-border">
-          <h1 className="text-2xl font-bold text-gold glow-gold">Dashboard Águia</h1>
-          <p className="text-xs text-muted mt-1">Gestão Financeira</p>
+    <div className="flex min-h-screen bg-slate-50">
+      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm">
+        <div className="p-6 border-b border-slate-200">
+          <h1 className="text-2xl font-bold text-blue-600">Dashboard Águia</h1>
+          <p className="text-xs text-slate-600 mt-1">Gestão Financeira</p>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href;
@@ -62,25 +62,25 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all ${
                   isActive
-                    ? 'bg-gold/10 text-gold border border-gold/20'
-                    : 'text-muted hover:text-text hover:bg-surface/50'
+                    ? 'bg-blue-50 text-blue-700 font-semibold shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
                 <Icon className="w-5 h-5" />
-                <span className="text-sm font-medium">{item.label}</span>
+                <span className="text-sm">{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t border-border">
+        <div className="p-4 border-t border-slate-200 bg-slate-50">
           {user ? (
             <>
-              <div className="bg-panel/50 rounded-lg p-4 mb-3">
-                <p className="text-xs text-muted mb-1">Conectado como</p>
-                <p className="text-sm font-medium text-text truncate">{user.email}</p>
+              <div className="bg-white rounded-lg p-4 mb-3 border border-slate-200">
+                <p className="text-xs text-slate-500 mb-1">Conectado como</p>
+                <p className="text-sm font-medium text-slate-900 truncate">{user.email}</p>
               </div>
               <Button
                 onClick={signOut}
@@ -93,7 +93,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </>
           ) : (
             <Link href="/login">
-              <Button variant="outline" className="w-full btn-primary">
+              <Button variant="default" className="w-full btn-primary">
                 Fazer Login
               </Button>
             </Link>
@@ -101,8 +101,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto">
-        <div className="p-8">{children}</div>
+      <main className="flex-1 overflow-y-auto bg-gradient-to-br from-slate-50 to-blue-50/30">
+        <div className="p-8 max-w-7xl mx-auto">{children}</div>
       </main>
     </div>
   );

@@ -10,8 +10,8 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        orbitron: ['Orbitron', 'sans-serif'],
         inter: ['Inter', 'sans-serif'],
+        jakarta: ['Plus Jakarta Sans', 'sans-serif'],
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
@@ -24,17 +24,18 @@ const config: Config = {
         sm: 'calc(var(--radius) - 4px)',
       },
       colors: {
-        dark: '#0B0F19',
-        surface: '#0F1117',
-        panel: '#0C101A',
-        gold: '#F5C742',
-        goldDeep: '#D4AF37',
-        text: '#E6E8EF',
-        muted: '#9AA0A6',
-        border: 'rgba(255, 255, 255, 0.06)',
-        success: '#22C55E',
-        warning: '#F59E0B',
-        danger: '#EF4444',
+        brand: {
+          50: '#eff6ff',
+          100: '#dbeafe',
+          200: '#bfdbfe',
+          300: '#93c5fd',
+          400: '#60a5fa',
+          500: '#3b82f6',
+          600: '#2563eb',
+          700: '#1d4ed8',
+          800: '#1e40af',
+          900: '#1e3a8a',
+        },
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         card: {
@@ -72,8 +73,11 @@ const config: Config = {
         },
       },
       boxShadow: {
-        gold: '0 10px 30px -15px rgba(245, 199, 66, 0.25)',
-        goldSoft: '0 0 24px rgba(212, 175, 55, 0.35)',
+        'sm': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+        'DEFAULT': '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1)',
+        'md': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)',
+        'lg': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)',
+        'xl': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
       },
       keyframes: {
         'accordion-down': {

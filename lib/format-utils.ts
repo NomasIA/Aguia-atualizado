@@ -129,15 +129,15 @@ export function truncate(text: string | null | undefined, maxLength: number): st
  */
 export function getStatusColor(status: string): string {
   const statusMap: Record<string, string> = {
-    'conciliado': 'bg-green-100 text-green-800',
-    'não conciliado': 'bg-yellow-100 text-yellow-800',
-    'duplicado': 'bg-red-100 text-red-800',
-    'ativo': 'bg-green-100 text-green-800',
-    'inativo': 'bg-gray-100 text-gray-800',
-    'pago': 'bg-green-100 text-green-800',
-    'pendente': 'bg-yellow-100 text-yellow-800',
-    'cancelado': 'bg-red-100 text-red-800'
+    'conciliado': 'bg-green-50 text-green-700 border-green-200',
+    'não conciliado': 'bg-amber-50 text-amber-700 border-amber-200',
+    'duplicado': 'bg-red-50 text-red-700 border-red-200',
+    'ativo': 'bg-green-50 text-green-700 border-green-200',
+    'inativo': 'bg-slate-50 text-slate-600 border-slate-200',
+    'pago': 'bg-green-50 text-green-700 border-green-200',
+    'pendente': 'bg-amber-50 text-amber-700 border-amber-200',
+    'cancelado': 'bg-red-50 text-red-700 border-red-200'
   };
 
-  return statusMap[status.toLowerCase()] || 'bg-gray-100 text-gray-800';
+  return statusMap[status.toLowerCase()] || 'bg-slate-50 text-slate-600 border-slate-200';
 }
