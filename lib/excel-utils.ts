@@ -358,287 +358,53 @@ export interface ImportedTransaction {
   saldo?: number;
 }
 
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
-      result.push(current.trim());
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-
-  result.push(current.trim());
-  return result;
-}
-
-export function importBankStatementCSV(file: File): Promise<ImportedTransaction[]> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = (e) => {
-      try {
-        const text = e.target?.result as string;
-        const lines = text.split(/\r?\n/);
-
-        console.log('Total de linhas no CSV:', lines.length);
-        console.log('Primeiras 10 linhas:', lines.slice(0, 10));
-
-        const transactions: ImportedTransaction[] = [];
-        let dataRowStart = -1;
-
-        for (let i = 0; i < Math.min(20, lines.length); i++) {
-          const lineLower = lines[i].toLowerCase();
-          if (lineLower.includes('lancamento') ||
-              (lineLower.includes('data') && lineLower.includes('valor'))) {
-            dataRowStart = i + 1;
-            console.log('Header encontrado na linha:', i);
-            break;
-          }
-        }
-
-        if (dataRowStart === -1) {
-          for (let i = 0; i < lines.length; i++) {
-            const cells = parseCSVLine(lines[i]);
-            if (cells[0] && cells[0].match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-              dataRowStart = i;
-              console.log('Primeira linha de dados encontrada:', i);
-              break;
-            }
-          }
-        }
-
-        if (dataRowStart === -1) {
-          dataRowStart = 0;
-        }
-
-        for (let i = dataRowStart; i < lines.length; i++) {
-          const line = lines[i].trim();
-          if (!line) continue;
-
-          const cells = parseCSVLine(line);
-          if (cells.length < 2) continue;
-
-          const dataStr = cells[0];
-          const lancamento = cells[1] || '';
-          const razaoSocial = cells[2] || '';
-
-          let valorRaw = null;
-          for (let col = 3; col < cells.length; col++) {
-            const cell = cells[col].trim();
-            if (cell && (cell.match(/[\d,.-]/) || !isNaN(parseFloat(cell.replace(',', '.'))))) {
-              valorRaw = cell;
-              break;
-            }
-          }
-
-          const lancamentoLower = lancamento.toLowerCase();
-          if (!dataStr ||
-              lancamentoLower.includes('saldo total') ||
-              lancamentoLower.includes('saldo anterior') ||
-              lancamentoLower === 'data' ||
-              lancamentoLower === '') {
-            continue;
-          }
-
-          let dataFormatted: string;
-          try {
-            if (dataStr.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-              const parsedDate = parse(dataStr, 'dd/MM/yyyy', new Date());
-              dataFormatted = format(parsedDate, 'yyyy-MM-dd');
-            } else {
-              continue;
-            }
-          } catch {
-            continue;
-          }
-
-          if (!valorRaw) continue;
-
-          const isNegative = valorRaw.includes('-');
-          const cleanValue = valorRaw.replace(/[^\d,]/g, '').replace(',', '.');
-          const valor = Math.abs(parseFloat(cleanValue) || 0);
-
-          if (valor === 0) continue;
-
-          const tipo: 'entrada' | 'saida' = isNegative ? 'saida' : 'entrada';
-
-          const descricaoCompleta = razaoSocial && razaoSocial.trim() !== ''
-            ? `${lancamento} - ${razaoSocial}`.substring(0, 200)
-            : lancamento.substring(0, 200);
-
-          let categoria = 'Outros';
-          if (lancamentoLower.includes('pix')) {
-            categoria = 'PIX';
-          } else if (lancamentoLower.includes('ted') || lancamentoLower.includes('transferencia')) {
-            categoria = 'Transferência';
-          } else if (lancamentoLower.includes('sispag') || lancamentoLower.includes('fornecedor')) {
-            categoria = 'Fornecedores';
-          } else if (lancamentoLower.includes('recebimento') || lancamentoLower.includes('receita')) {
-            categoria = 'Receitas';
-          } else if (lancamentoLower.includes('rendimento')) {
-            categoria = 'Rendimentos';
-          }
-
-          transactions.push({
-            data: dataFormatted,
-            descricao: descricaoCompleta,
-            valor,
-            tipo,
-            categoria,
-          });
-        }
-
-        console.log('Total de transações encontradas:', transactions.length);
-        resolve(transactions);
-      } catch (error) {
-        console.error('Erro ao processar CSV:', error);
-        reject(error);
-      }
-    };
-
-    reader.onerror = () => reject(new Error('Erro ao ler arquivo'));
-    reader.readAsText(file, 'ISO-8859-1');
-  });
-}
-
 export function importBankStatement(file: File): Promise<ImportedTransaction[]> {
-  const fileName = file.name.toLowerCase();
-  if (fileName.endsWith('.csv') || fileName.endsWith('.txt')) {
-    return importBankStatementCSV(file);
-  }
-
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
     reader.onload = (e) => {
       try {
         const data = e.target?.result;
-        const workbook = XLSX.read(data, {
-          type: 'binary',
-          cellDates: true,
-          cellNF: false,
-          cellText: false
-        });
+        const workbook = XLSX.read(data, { type: 'binary' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-
-        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-        console.log('Range do worksheet:', worksheet['!ref']);
-        console.log('Total de linhas no range:', range.e.r + 1);
-
-        const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, {
-          header: 1,
-          defval: '',
-          blankrows: false,
-          raw: false
-        });
-
-        console.log('Total de linhas:', jsonData.length);
-        console.log('Primeiras 10 linhas:', jsonData.slice(0, 10));
-
-        if (jsonData.length === 0) {
-          console.log('Tentando leitura manual célula por célula...');
-          const manualData: any[][] = [];
-          for (let row = range.s.r; row <= range.e.r; row++) {
-            const rowData: any[] = [];
-            for (let col = range.s.c; col <= range.e.c; col++) {
-              const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
-              const cell = worksheet[cellAddress];
-              rowData.push(cell ? (cell.w || cell.v || '') : '');
-            }
-            manualData.push(rowData);
-          }
-          console.log('Dados lidos manualmente:', manualData.length, 'linhas');
-          console.log('Primeiras 10 linhas manuais:', manualData.slice(0, 10));
-          jsonData.length = 0;
-          jsonData.push(...manualData);
-        }
+        const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
         const transactions: ImportedTransaction[] = [];
         let dataRowStart = -1;
-        let headerRow = -1;
 
-        for (let i = 0; i < Math.min(20, jsonData.length); i++) {
+        for (let i = 0; i < jsonData.length; i++) {
           const row = jsonData[i];
-          const rowStr = row.join(' ').toLowerCase();
-
-          if (rowStr.includes('lancamento') ||
-              (rowStr.includes('data') && rowStr.includes('valor'))) {
-            headerRow = i;
+          if (row[0] === 'Data' || (typeof row[0] === 'string' && row[0].toLowerCase().includes('data'))) {
             dataRowStart = i + 1;
-            console.log('Header encontrado na linha:', i);
-            console.log('Header row:', row);
             break;
           }
         }
 
         if (dataRowStart === -1) {
+          dataRowStart = 0;
           for (let i = 0; i < jsonData.length; i++) {
             const row = jsonData[i];
-            if (!row || row.length === 0) continue;
-
-            const firstCell = String(row[0] || '');
-            const secondCell = String(row[1] || '');
-
-            if (firstCell.match(/^\d{2}\/\d{2}\/\d{4}$/) && secondCell.length > 0) {
+            const firstCell = row[0];
+            if (typeof firstCell === 'string' && firstCell.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
               dataRowStart = i;
-              console.log('Data row start encontrado na linha:', i);
-              console.log('Primeira linha de dados:', row);
               break;
             }
           }
         }
 
-        if (dataRowStart === -1) {
-          console.log('Nenhum cabeçalho ou data encontrada. Começando da linha 0');
-          dataRowStart = 0;
-        }
-
-        console.log('Iniciando leitura a partir da linha:', dataRowStart);
-
         for (let i = dataRowStart; i < jsonData.length; i++) {
           const row = jsonData[i];
 
-          if (!row || row.length < 2) {
-            console.log(`Linha ${i}: vazia ou muito curta`);
-            continue;
-          }
+          if (!row || row.length < 2) continue;
 
           const dataStr = row[0];
-          const lancamento = String(row[1] || '');
-          const razaoSocial = String(row[2] || '');
+          const lancamento = row[1] || '';
+          const razaoSocial = row[2] || '';
+          const valorRaw = row[4];
+          const saldoRaw = row[5];
 
-          let valorRaw = null;
-          let saldoRaw = null;
-
-          for (let col = 3; col < row.length; col++) {
-            const cellValue = row[col];
-            if (cellValue !== '' && cellValue !== null && cellValue !== undefined) {
-              if (valorRaw === null) {
-                valorRaw = cellValue;
-              } else if (saldoRaw === null) {
-                saldoRaw = cellValue;
-                break;
-              }
-            }
-          }
-
-          const lancamentoLower = lancamento.toLowerCase();
-          if (!dataStr ||
-              lancamentoLower.includes('saldo total') ||
-              lancamentoLower.includes('saldo anterior') ||
-              lancamentoLower === 'data' ||
-              lancamentoLower === '') {
-            console.log(`Linha ${i}: ignorada (${lancamento})`);
+          if (!dataStr || lancamento.toString().toLowerCase().includes('saldo total')) {
             continue;
           }
 
@@ -651,38 +417,33 @@ export function importBankStatement(file: File): Promise<ImportedTransaction[]> 
               const parsedDate = parse(dataStr, 'dd/MM/yyyy', new Date());
               dataFormatted = format(parsedDate, 'yyyy-MM-dd');
             } else {
-              console.log(`Linha ${i}: data inválida (${dataStr})`);
               continue;
             }
-          } catch (err) {
-            console.log(`Linha ${i}: erro ao parsear data (${dataStr})`);
+          } catch {
             continue;
           }
 
           let valor = 0;
-          let isNegative = false;
-
           if (typeof valorRaw === 'number') {
             valor = Math.abs(valorRaw);
-            isNegative = valorRaw < 0;
           } else if (typeof valorRaw === 'string') {
-            isNegative = valorRaw.includes('-');
-            const cleanValue = valorRaw.replace(/[^\d,]/g, '').replace(',', '.');
+            const cleanValue = valorRaw.replace(/[^\d,-]/g, '').replace(',', '.');
             valor = Math.abs(parseFloat(cleanValue) || 0);
           }
 
-          if (valor === 0) {
-            console.log(`Linha ${i}: valor zero ou inválido (${valorRaw})`);
-            continue;
-          }
+          if (valor === 0) continue;
 
-          const tipo: 'entrada' | 'saida' = isNegative ? 'saida' : 'entrada';
+          const tipo: 'entrada' | 'saida' = (typeof valorRaw === 'number' && valorRaw > 0) ||
+                                            (typeof valorRaw === 'string' && !valorRaw.includes('-'))
+            ? 'entrada'
+            : 'saida';
 
-          const descricaoCompleta = razaoSocial && razaoSocial.trim() !== ''
+          const descricaoCompleta = razaoSocial
             ? `${lancamento} - ${razaoSocial}`.substring(0, 200)
             : lancamento.substring(0, 200);
 
           let categoria = 'Outros';
+          const lancamentoLower = lancamento.toLowerCase();
           if (lancamentoLower.includes('pix')) {
             categoria = 'PIX';
           } else if (lancamentoLower.includes('ted') || lancamentoLower.includes('transferencia')) {
@@ -698,12 +459,10 @@ export function importBankStatement(file: File): Promise<ImportedTransaction[]> 
           let saldo: number | undefined;
           if (typeof saldoRaw === 'number') {
             saldo = saldoRaw;
-          } else if (typeof saldoRaw === 'string' && saldoRaw.trim() !== '') {
+          } else if (typeof saldoRaw === 'string') {
             const cleanSaldo = saldoRaw.replace(/[^\d,-]/g, '').replace(',', '.');
             saldo = parseFloat(cleanSaldo) || undefined;
           }
-
-          console.log(`Linha ${i}: OK - ${dataFormatted} - ${tipo} - ${valor}`);
 
           transactions.push({
             data: dataFormatted,
@@ -715,10 +474,8 @@ export function importBankStatement(file: File): Promise<ImportedTransaction[]> 
           });
         }
 
-        console.log('Total de transações encontradas:', transactions.length);
         resolve(transactions);
       } catch (error) {
-        console.error('Erro ao processar Excel:', error);
         reject(error);
       }
     };

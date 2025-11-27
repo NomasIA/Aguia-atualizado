@@ -479,7 +479,7 @@ export default function EntradasSaidasPage() {
             <label className="cursor-pointer">
               <input
                 type="file"
-                accept=".xlsx,.xls,.csv,.txt"
+                accept=".xlsx,.xls"
                 onChange={handleFileImport}
                 className="hidden"
                 disabled={importing}
@@ -487,7 +487,7 @@ export default function EntradasSaidasPage() {
               <Button className="btn-secondary" disabled={importing} asChild>
                 <span>
                   <Upload className="w-4 h-4 mr-2" />
-                  {importing ? 'Importando...' : 'Importar Extrato'}
+                  {importing ? 'Importando...' : 'Importar Excel'}
                 </span>
               </Button>
             </label>
