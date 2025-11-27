@@ -1,6 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { AuthProvider } from '@/lib/auth-context';
+import { ThemeProvider } from '@/lib/theme-context';
 import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
@@ -15,11 +16,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body className="bg-dark text-text font-inter antialiased">
-        <AuthProvider>
-          {children}
-          <Toaster />
-        </AuthProvider>
+      <body className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-inter antialiased">
+        <ThemeProvider>
+          <AuthProvider>
+            {children}
+            <Toaster />
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

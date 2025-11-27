@@ -113,7 +113,7 @@ export default function HomePage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-96">
-          <div className="text-blue-600 text-lg font-semibold">Carregando...</div>
+          <div className="text-blue-600 dark:text-blue-400 text-lg font-semibold">Carregando...</div>
         </div>
       </DashboardLayout>
     );
@@ -123,53 +123,53 @@ export default function HomePage() {
     <DashboardLayout>
       <div className="space-y-8">
         <div>
-          <h1 className="text-4xl font-bold text-slate-900 mb-2">Visão Geral</h1>
-          <p className="text-slate-600 text-lg">Dashboard financeiro em tempo real</p>
+          <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">Visão Geral</h1>
+          <p className="text-slate-600 dark:text-slate-400 text-lg">Dashboard financeiro em tempo real</p>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <Card className="card border-l-4 border-l-blue-500">
+          <Card className="card border-l-4 border-l-blue-500 dark:border-l-blue-400">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-slate-600">Saldo Banco (Itaú)</CardTitle>
-              <div className="p-2 bg-blue-50 rounded-lg">
-                <Building2 className="h-5 w-5 text-blue-600" />
+              <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">Saldo Banco (Itaú)</CardTitle>
+              <div className="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+                <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-900">
+              <div className="text-3xl font-bold text-slate-900 dark:text-slate-100">
                 {kpis ? formatCurrency(parseFloat(kpis.saldo_banco.toString())) : 'R$ 0,00'}
               </div>
-              <p className="text-sm text-slate-500 mt-2">Conta principal</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Conta principal</p>
             </CardContent>
           </Card>
 
-          <Card className="card border-l-4 border-l-green-500">
+          <Card className="card border-l-4 border-l-green-500 dark:border-l-green-400">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-slate-600">Saldo Dinheiro</CardTitle>
-              <div className="p-2 bg-green-50 rounded-lg">
-                <Wallet className="h-5 w-5 text-green-600" />
+              <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">Saldo Dinheiro</CardTitle>
+              <div className="p-2 bg-green-50 dark:bg-green-900/30 rounded-lg">
+                <Wallet className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-900">
+              <div className="text-3xl font-bold text-slate-900 dark:text-slate-100">
                 {kpis ? formatCurrency(parseFloat(kpis.saldo_dinheiro.toString())) : 'R$ 0,00'}
               </div>
-              <p className="text-sm text-slate-500 mt-2">Caixa físico</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Caixa físico</p>
             </CardContent>
           </Card>
 
-          <Card className="card border-l-4 border-l-violet-500">
+          <Card className="card border-l-4 border-l-violet-500 dark:border-l-violet-400">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-slate-600">Saldo Total</CardTitle>
-              <div className="p-2 bg-violet-50 rounded-lg">
-                <DollarSign className="h-5 w-5 text-violet-600" />
+              <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">Saldo Total</CardTitle>
+              <div className="p-2 bg-violet-50 dark:bg-violet-900/30 rounded-lg">
+                <DollarSign className="h-5 w-5 text-violet-600 dark:text-violet-400" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-900">
+              <div className="text-3xl font-bold text-slate-900 dark:text-slate-100">
                 {formatCurrency(saldoTotal)}
               </div>
-              <p className="text-sm text-slate-500 mt-2">Banco + Dinheiro</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Banco + Dinheiro</p>
             </CardContent>
           </Card>
 
