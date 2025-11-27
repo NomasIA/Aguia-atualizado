@@ -62,6 +62,7 @@ export default function CalculadoraServicosPage() {
   const [impostos, setImpostos] = useState(8.5);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'calculator' | 'contracts'>('calculator');
+  const [resumoExpanded, setResumoExpanded] = useState(false);
 
   const [novaDialogOpen, setNovaDialogOpen] = useState(false);
   const [novoDiarista, setNovoDiarista] = useState({
@@ -305,14 +306,14 @@ export default function CalculadoraServicosPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="space-y-4 md:space-y-6">
+        <div className="flex flex-col gap-3 md:gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-3">
-              <Calculator className="w-10 h-10 text-blue-600 dark:text-blue-400" />
-              Contratos de Serviços
+            <h1 className="text-2xl md:text-4xl font-bold text-slate-900 dark:text-slate-100 mb-1 md:mb-2 flex items-center gap-2 md:gap-3">
+              <Calculator className="w-6 h-6 md:w-10 md:h-10 text-blue-600 dark:text-blue-400" />
+              <span className="leading-tight">Contratos de Serviços</span>
             </h1>
-            <p className="text-slate-600 dark:text-slate-400 text-lg">
+            <p className="text-slate-600 dark:text-slate-400 text-sm md:text-lg">
               Calcule e gerencie contratos de empréstimo de diaristas
             </p>
           </div>
@@ -320,7 +321,7 @@ export default function CalculadoraServicosPage() {
             <Button
               variant={viewMode === 'calculator' ? 'default' : 'outline'}
               onClick={() => setViewMode('calculator')}
-              className={viewMode === 'calculator' ? 'btn-primary' : 'btn-secondary'}
+              className={`flex-1 ${viewMode === 'calculator' ? 'btn-primary' : 'btn-secondary'}`}
             >
               <Calculator className="w-4 h-4 mr-2" />
               Calculadora
@@ -328,7 +329,7 @@ export default function CalculadoraServicosPage() {
             <Button
               variant={viewMode === 'contracts' ? 'default' : 'outline'}
               onClick={() => setViewMode('contracts')}
-              className={viewMode === 'contracts' ? 'btn-primary' : 'btn-secondary'}
+              className={`flex-1 ${viewMode === 'contracts' ? 'btn-primary' : 'btn-secondary'}`}
             >
               <FileText className="w-4 h-4 mr-2" />
               Contratos ({contratos.length})
@@ -337,28 +338,28 @@ export default function CalculadoraServicosPage() {
         </div>
 
         {viewMode === 'calculator' ? (
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="card">
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="text-slate-900 dark:text-white flex items-center gap-2">
+          <div className="space-y-4 md:space-y-6">
+            <Card className="card">
+              <CardHeader className="flex flex-col gap-3 pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-slate-900 dark:text-white flex items-center gap-2 text-base md:text-lg">
                     <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    Diaristas Selecionados
+                    Diaristas
                   </CardTitle>
                   <Dialog open={novaDialogOpen} onOpenChange={setNovaDialogOpen}>
                     <DialogTrigger asChild>
                       <Button size="sm" className="btn-primary">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Adicionar Diarista
+                        <Plus className="w-4 h-4 md:mr-2" />
+                        <span className="hidden md:inline">Adicionar</span>
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="bg-white dark:bg-slate-800">
+                    <DialogContent className="bg-white dark:bg-slate-800 max-w-[95vw] sm:max-w-lg">
                       <DialogHeader>
                         <DialogTitle className="text-slate-900 dark:text-white">Adicionar Diarista</DialogTitle>
                       </DialogHeader>
-                      <div className="space-y-4">
+                      <div className="space-y-3">
                         <div>
-                          <Label className="text-slate-700 dark:text-slate-300">Nome do Diarista</Label>
+                          <Label className="text-slate-700 dark:text-slate-300 text-sm">Nome do Diarista</Label>
                           <Input
                             value={novoDiarista.nome}
                             onChange={(e) => setNovoDiarista({ ...novoDiarista, nome: e.target.value })}
@@ -366,9 +367,9 @@ export default function CalculadoraServicosPage() {
                             className="input-dark mt-1"
                           />
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <Label className="text-slate-700 dark:text-slate-300">Quantidade</Label>
+                            <Label className="text-slate-700 dark:text-slate-300 text-sm">Quantidade</Label>
                             <Input
                               type="number"
                               min="1"
@@ -378,7 +379,7 @@ export default function CalculadoraServicosPage() {
                             />
                           </div>
                           <div>
-                            <Label className="text-slate-700 dark:text-slate-300">Dias Úteis</Label>
+                            <Label className="text-slate-700 dark:text-slate-300 text-sm">Dias Úteis</Label>
                             <Input
                               type="number"
                               min="0"
@@ -388,20 +389,20 @@ export default function CalculadoraServicosPage() {
                             />
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-slate-700 dark:text-slate-300 text-sm">Valor Diária Útil (R$)</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={novoDiarista.valor_diaria_semana}
+                            onChange={(e) => setNovoDiarista({ ...novoDiarista, valor_diaria_semana: parseFloat(e.target.value) || 0 })}
+                            className="input-dark mt-1"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <Label className="text-slate-700 dark:text-slate-300">Valor Diária Útil</Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={novoDiarista.valor_diaria_semana}
-                              onChange={(e) => setNovoDiarista({ ...novoDiarista, valor_diaria_semana: parseFloat(e.target.value) || 0 })}
-                              className="input-dark mt-1"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-slate-700 dark:text-slate-300">Dias FDS</Label>
+                            <Label className="text-slate-700 dark:text-slate-300 text-sm">Dias FDS</Label>
                             <Input
                               type="number"
                               min="0"
@@ -410,17 +411,17 @@ export default function CalculadoraServicosPage() {
                               className="input-dark mt-1"
                             />
                           </div>
-                        </div>
-                        <div>
-                          <Label className="text-slate-700 dark:text-slate-300">Valor Diária FDS</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={novoDiarista.valor_diaria_fds}
-                            onChange={(e) => setNovoDiarista({ ...novoDiarista, valor_diaria_fds: parseFloat(e.target.value) || 0 })}
-                            className="input-dark mt-1"
-                          />
+                          <div>
+                            <Label className="text-slate-700 dark:text-slate-300 text-sm">Valor FDS (R$)</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={novoDiarista.valor_diaria_fds}
+                              onChange={(e) => setNovoDiarista({ ...novoDiarista, valor_diaria_fds: parseFloat(e.target.value) || 0 })}
+                              className="input-dark mt-1"
+                            />
+                          </div>
                         </div>
                         <Button onClick={adicionarDiarista} className="btn-primary w-full">
                           <Save className="w-4 h-4 mr-2" />
@@ -429,417 +430,399 @@ export default function CalculadoraServicosPage() {
                       </div>
                     </DialogContent>
                   </Dialog>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {diaristas.map((d) => (
-                    <div
-                      key={d.id}
-                      className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600"
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-semibold text-slate-900 dark:text-white">{d.nome}</h3>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
-                            {formatCurrency(d.custo_total)}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removerDiarista(d.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-5 gap-2">
-                        <div>
-                          <Label className="text-xs text-slate-600 dark:text-slate-400">Qtd</Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={d.quantidade}
-                            onChange={(e) => atualizarDiarista(d.id, 'quantidade', parseInt(e.target.value) || 1)}
-                            className="input-dark mt-1 h-8 text-sm"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-slate-600 dark:text-slate-400">Dias Úteis</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={d.dias_semana}
-                            onChange={(e) => atualizarDiarista(d.id, 'dias_semana', parseInt(e.target.value) || 0)}
-                            className="input-dark mt-1 h-8 text-sm"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-slate-600 dark:text-slate-400">R$ Útil</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={d.valor_diaria_semana}
-                            onChange={(e) => atualizarDiarista(d.id, 'valor_diaria_semana', parseFloat(e.target.value) || 0)}
-                            className="input-dark mt-1 h-8 text-sm"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-slate-600 dark:text-slate-400">Dias FDS</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={d.dias_fds}
-                            onChange={(e) => atualizarDiarista(d.id, 'dias_fds', parseInt(e.target.value) || 0)}
-                            className="input-dark mt-1 h-8 text-sm"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-slate-600 dark:text-slate-400">R$ FDS</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={d.valor_diaria_fds}
-                            onChange={(e) => atualizarDiarista(d.id, 'valor_diaria_fds', parseFloat(e.target.value) || 0)}
-                            className="input-dark mt-1 h-8 text-sm"
-                          />
-                        </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {diaristas.map((d) => (
+                  <div
+                    key={d.id}
+                    className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-semibold text-sm md:text-base text-slate-900 dark:text-white">{d.nome}</h3>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs md:text-sm font-bold text-blue-600 dark:text-blue-400">
+                          {formatCurrency(d.custo_total)}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removerDiarista(d.id)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 h-7 w-7 p-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </div>
-                  ))}
-
-                  {diaristas.length === 0 && (
-                    <div className="text-center py-8 text-slate-500 dark:text-slate-400">
-                      Nenhum diarista adicionado. Clique em "Adicionar Diarista" para começar.
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="card">
-                <CardHeader>
-                  <CardTitle className="text-slate-900 dark:text-white flex items-center gap-2">
-                    <DollarSign className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    Custos Adicionais
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {custosAdicionais.map((custo) => (
-                    <div key={custo.id} className="flex gap-3 items-end">
-                      <div className="flex-1">
-                        <Label className="text-xs text-slate-600 dark:text-slate-400">Descrição</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <Label className="text-xs text-slate-600 dark:text-slate-400">Qtd</Label>
                         <Input
-                          value={custo.descricao}
-                          onChange={(e) => atualizarCustoAdicional(custo.id, 'descricao', e.target.value)}
-                          placeholder="Ex: Material, Transporte"
-                          className="input-dark mt-1"
+                          type="number"
+                          min="1"
+                          value={d.quantidade}
+                          onChange={(e) => atualizarDiarista(d.id, 'quantidade', parseInt(e.target.value) || 1)}
+                          className="input-dark mt-1 h-8 text-xs"
                         />
                       </div>
-                      <div className="w-32">
-                        <Label className="text-xs text-slate-600 dark:text-slate-400">Valor</Label>
+                      <div>
+                        <Label className="text-xs text-slate-600 dark:text-slate-400">Dias Úteis</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={d.dias_semana}
+                          onChange={(e) => atualizarDiarista(d.id, 'dias_semana', parseInt(e.target.value) || 0)}
+                          className="input-dark mt-1 h-8 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-slate-600 dark:text-slate-400">R$ Útil</Label>
                         <Input
                           type="number"
                           min="0"
                           step="0.01"
-                          value={custo.valor}
-                          onChange={(e) => atualizarCustoAdicional(custo.id, 'valor', parseFloat(e.target.value) || 0)}
+                          value={d.valor_diaria_semana}
+                          onChange={(e) => atualizarDiarista(d.id, 'valor_diaria_semana', parseFloat(e.target.value) || 0)}
+                          className="input-dark mt-1 h-8 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-slate-600 dark:text-slate-400">Dias FDS</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={d.dias_fds}
+                          onChange={(e) => atualizarDiarista(d.id, 'dias_fds', parseInt(e.target.value) || 0)}
+                          className="input-dark mt-1 h-8 text-xs"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs text-slate-600 dark:text-slate-400">R$ FDS</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={d.valor_diaria_fds}
+                          onChange={(e) => atualizarDiarista(d.id, 'valor_diaria_fds', parseFloat(e.target.value) || 0)}
+                          className="input-dark mt-1 h-8 text-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {diaristas.length === 0 && (
+                  <div className="text-center py-8 text-slate-500 dark:text-slate-400 text-sm">
+                    Nenhum diarista adicionado. Clique em "Adicionar" para começar.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="card">
+              <CardHeader>
+                <CardTitle className="text-slate-900 dark:text-white flex items-center gap-2 text-base md:text-lg">
+                  <DollarSign className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  Custos Adicionais
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {custosAdicionais.map((custo) => (
+                  <div key={custo.id} className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <Label className="text-xs text-slate-600 dark:text-slate-400">Descrição</Label>
+                      <Input
+                        value={custo.descricao}
+                        onChange={(e) => atualizarCustoAdicional(custo.id, 'descricao', e.target.value)}
+                        placeholder="Ex: Material"
+                        className="input-dark mt-1 text-sm"
+                      />
+                    </div>
+                    <div className="w-24">
+                      <Label className="text-xs text-slate-600 dark:text-slate-400">Valor</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={custo.valor}
+                        onChange={(e) => atualizarCustoAdicional(custo.id, 'valor', parseFloat(e.target.value) || 0)}
+                        className="input-dark mt-1 text-sm"
+                      />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removerCustoAdicional(custo.id)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 h-9 w-9 p-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={adicionarCustoAdicional}
+                  className="btn-secondary w-full"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Adicionar Custo
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="card">
+              <CardHeader>
+                <CardTitle className="text-slate-900 dark:text-white flex items-center gap-2 text-base md:text-lg">
+                  <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  Margens e Impostos
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <div className="flex justify-between mb-2">
+                    <Label className="text-sm text-slate-700 dark:text-slate-300">Margem de Lucro</Label>
+                    <span className="text-sm font-bold text-blue-600 dark:text-blue-400">{margemLucro}%</span>
+                  </div>
+                  <Input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    value={margemLucro}
+                    onChange={(e) => setMargemLucro(parseFloat(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between mb-2">
+                    <Label className="text-sm text-slate-700 dark:text-slate-300">Impostos</Label>
+                    <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{impostos}%</span>
+                  </div>
+                  <Input
+                    type="range"
+                    min="0"
+                    max="30"
+                    step="0.5"
+                    value={impostos}
+                    onChange={(e) => setImpostos(parseFloat(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="card border-l-4 border-l-blue-500 dark:border-l-blue-400 sticky bottom-0 md:static">
+              <CardHeader>
+                <CardTitle className="text-slate-900 dark:text-white flex items-center gap-2 text-base md:text-lg">
+                  <Percent className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  Resumo do Orçamento
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700">
+                    <span className="text-slate-600 dark:text-slate-400">Custo Diaristas</span>
+                    <span className="font-semibold text-slate-900 dark:text-white">
+                      {formatCurrency(custoDiaristas)}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700">
+                    <span className="text-slate-600 dark:text-slate-400">Custos Adicionais</span>
+                    <span className="font-semibold text-slate-900 dark:text-white">
+                      {formatCurrency(custoAdicionaisTotal)}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">Custo Total</span>
+                    <span className="font-bold text-slate-900 dark:text-white">
+                      {formatCurrency(custoTotal)}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700">
+                    <span className="text-slate-600 dark:text-slate-400">
+                      Impostos ({impostos}%)
+                    </span>
+                    <span className="font-semibold text-orange-600 dark:text-orange-400">
+                      {formatCurrency(valorImpostos)}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700">
+                    <span className="text-slate-600 dark:text-slate-400">
+                      Lucro ({margemLucro}%)
+                    </span>
+                    <span className="font-semibold text-green-600 dark:text-green-400">
+                      {formatCurrency(valorLucro)}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
+                    <span className="font-bold text-slate-900 dark:text-white">Valor Final</span>
+                    <span className="text-xl md:text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      {formatCurrency(valorFinal)}
+                    </span>
+                  </div>
+                </div>
+
+                <Dialog open={contratoDialog} onOpenChange={setContratoDialog}>
+                  <DialogTrigger asChild>
+                    <Button
+                      className="btn-primary w-full"
+                      disabled={diaristas.length === 0}
+                    >
+                      <FileText className="w-4 h-4 mr-2" />
+                      Gerar Contrato
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-white dark:bg-slate-800 max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle className="text-slate-900 dark:text-white">Dados do Contrato</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-slate-700 dark:text-slate-300 text-sm">Nome do Cliente</Label>
+                        <Input
+                          value={contratoData.nome_cliente}
+                          onChange={(e) => setContratoData({ ...contratoData, nome_cliente: e.target.value })}
+                          placeholder="Ex: Empresa ABC Ltda"
                           className="input-dark mt-1"
                         />
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removerCustoAdicional(custo.id)}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={adicionarCustoAdicional}
-                    className="btn-secondary w-full"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Adicionar Custo
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card className="card">
-                <CardHeader>
-                  <CardTitle className="text-slate-900 dark:text-white flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    Margens e Impostos
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label className="text-sm text-slate-700 dark:text-slate-300">Margem de Lucro (%)</Label>
-                    <div className="flex gap-3 items-center mt-2">
-                      <Input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="0.5"
-                        value={margemLucro}
-                        onChange={(e) => setMargemLucro(parseFloat(e.target.value))}
-                        className="flex-1"
-                      />
-                      <Input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.5"
-                        value={margemLucro}
-                        onChange={(e) => setMargemLucro(parseFloat(e.target.value) || 0)}
-                        className="input-dark w-20"
-                      />
-                      <span className="text-slate-600 dark:text-slate-400">%</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label className="text-sm text-slate-700 dark:text-slate-300">Impostos (%)</Label>
-                    <div className="flex gap-3 items-center mt-2">
-                      <Input
-                        type="range"
-                        min="0"
-                        max="30"
-                        step="0.5"
-                        value={impostos}
-                        onChange={(e) => setImpostos(parseFloat(e.target.value))}
-                        className="flex-1"
-                      />
-                      <Input
-                        type="number"
-                        min="0"
-                        max="30"
-                        step="0.5"
-                        value={impostos}
-                        onChange={(e) => setImpostos(parseFloat(e.target.value) || 0)}
-                        className="input-dark w-20"
-                      />
-                      <span className="text-slate-600 dark:text-slate-400">%</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="space-y-6">
-              <Card className="card border-l-4 border-l-blue-500 dark:border-l-blue-400 sticky top-6">
-                <CardHeader>
-                  <CardTitle className="text-slate-900 dark:text-white flex items-center gap-2">
-                    <Percent className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    Resumo do Orçamento
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700">
-                      <span className="text-sm text-slate-600 dark:text-slate-400">Custo Diaristas</span>
-                      <span className="font-semibold text-slate-900 dark:text-white">
-                        {formatCurrency(custoDiaristas)}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700">
-                      <span className="text-sm text-slate-600 dark:text-slate-400">Custos Adicionais</span>
-                      <span className="font-semibold text-slate-900 dark:text-white">
-                        {formatCurrency(custoAdicionaisTotal)}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700">
-                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Custo Total</span>
-                      <span className="font-bold text-slate-900 dark:text-white">
-                        {formatCurrency(custoTotal)}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700">
-                      <span className="text-sm text-slate-600 dark:text-slate-400">
-                        Impostos ({impostos}%)
-                      </span>
-                      <span className="font-semibold text-orange-600 dark:text-orange-400">
-                        {formatCurrency(valorImpostos)}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700">
-                      <span className="text-sm text-slate-600 dark:text-slate-400">
-                        Lucro ({margemLucro}%)
-                      </span>
-                      <span className="font-semibold text-green-600 dark:text-green-400">
-                        {formatCurrency(valorLucro)}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center pt-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-                      <span className="text-base font-bold text-slate-900 dark:text-white">Valor Final</span>
-                      <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                        {formatCurrency(valorFinal)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <Dialog open={contratoDialog} onOpenChange={setContratoDialog}>
-                    <DialogTrigger asChild>
-                      <Button
-                        className="btn-primary w-full"
-                        disabled={diaristas.length === 0}
-                      >
-                        <FileText className="w-4 h-4 mr-2" />
-                        Gerar Contrato
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="bg-white dark:bg-slate-800 max-w-2xl">
-                      <DialogHeader>
-                        <DialogTitle className="text-slate-900 dark:text-white">Dados do Contrato</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 max-h-[70vh] overflow-y-auto">
-                        <div>
-                          <Label className="text-slate-700 dark:text-slate-300">Nome do Cliente</Label>
-                          <Input
-                            value={contratoData.nome_cliente}
-                            onChange={(e) => setContratoData({ ...contratoData, nome_cliente: e.target.value })}
-                            placeholder="Ex: Empresa ABC Ltda"
-                            className="input-dark mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-slate-700 dark:text-slate-300">Descrição do Serviço</Label>
-                          <Textarea
-                            value={contratoData.descricao}
-                            onChange={(e) => setContratoData({ ...contratoData, descricao: e.target.value })}
-                            placeholder="Descreva o serviço a ser prestado"
-                            className="input-dark mt-1"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <Label className="text-slate-700 dark:text-slate-300">Data Início</Label>
-                            <Input
-                              type="date"
-                              value={contratoData.data_inicio}
-                              onChange={(e) => setContratoData({ ...contratoData, data_inicio: e.target.value })}
-                              className="input-dark mt-1"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-slate-700 dark:text-slate-300">Data Fim</Label>
-                            <Input
-                              type="date"
-                              value={contratoData.data_fim}
-                              onChange={(e) => setContratoData({ ...contratoData, data_fim: e.target.value })}
-                              className="input-dark mt-1"
-                            />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <Label className="text-slate-700 dark:text-slate-300">Forma de Pagamento</Label>
-                            <Select
-                              value={contratoData.forma_pagamento}
-                              onValueChange={(value) => setContratoData({ ...contratoData, forma_pagamento: value })}
-                            >
-                              <SelectTrigger className="input-dark mt-1">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="pix">PIX</SelectItem>
-                                <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                                <SelectItem value="transferencia">Transferência</SelectItem>
-                                <SelectItem value="boleto">Boleto</SelectItem>
-                                <SelectItem value="cheque">Cheque</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label className="text-slate-700 dark:text-slate-300">Prazo Pagamento (dias)</Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={contratoData.prazo_pagamento}
-                              onChange={(e) => setContratoData({ ...contratoData, prazo_pagamento: parseInt(e.target.value) || 30 })}
-                              className="input-dark mt-1"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-slate-700 dark:text-slate-300">Observações</Label>
-                          <Textarea
-                            value={contratoData.observacoes}
-                            onChange={(e) => setContratoData({ ...contratoData, observacoes: e.target.value })}
-                            placeholder="Observações adicionais"
-                            className="input-dark mt-1"
-                          />
-                        </div>
-                        <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                          <div className="flex justify-between mb-2">
-                            <span className="text-sm text-slate-600 dark:text-slate-400">Valor do Contrato:</span>
-                            <span className="font-bold text-lg text-blue-600 dark:text-blue-400">
-                              {formatCurrency(valorFinal)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
-                            <span>{diaristas.length} diarista(s)</span>
-                            <span>{custosAdicionais.length} custo(s) adicional(is)</span>
-                          </div>
-                        </div>
-                        <Button onClick={criarContrato} className="btn-primary w-full">
-                          <Save className="w-4 h-4 mr-2" />
-                          Confirmar e Criar Contrato
-                        </Button>
+                      <div>
+                        <Label className="text-slate-700 dark:text-slate-300 text-sm">Descrição do Serviço</Label>
+                        <Textarea
+                          value={contratoData.descricao}
+                          onChange={(e) => setContratoData({ ...contratoData, descricao: e.target.value })}
+                          placeholder="Descreva o serviço"
+                          className="input-dark mt-1"
+                          rows={3}
+                        />
                       </div>
-                    </DialogContent>
-                  </Dialog>
-                </CardContent>
-              </Card>
-            </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-slate-700 dark:text-slate-300 text-sm">Data Início</Label>
+                          <Input
+                            type="date"
+                            value={contratoData.data_inicio}
+                            onChange={(e) => setContratoData({ ...contratoData, data_inicio: e.target.value })}
+                            className="input-dark mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-slate-700 dark:text-slate-300 text-sm">Data Fim</Label>
+                          <Input
+                            type="date"
+                            value={contratoData.data_fim}
+                            onChange={(e) => setContratoData({ ...contratoData, data_fim: e.target.value })}
+                            className="input-dark mt-1"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-slate-700 dark:text-slate-300 text-sm">Forma de Pagamento</Label>
+                          <Select
+                            value={contratoData.forma_pagamento}
+                            onValueChange={(value) => setContratoData({ ...contratoData, forma_pagamento: value })}
+                          >
+                            <SelectTrigger className="input-dark mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pix">PIX</SelectItem>
+                              <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                              <SelectItem value="transferencia">Transferência</SelectItem>
+                              <SelectItem value="boleto">Boleto</SelectItem>
+                              <SelectItem value="cheque">Cheque</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-slate-700 dark:text-slate-300 text-sm">Prazo (dias)</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={contratoData.prazo_pagamento}
+                            onChange={(e) => setContratoData({ ...contratoData, prazo_pagamento: parseInt(e.target.value) || 30 })}
+                            className="input-dark mt-1"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-slate-700 dark:text-slate-300 text-sm">Observações</Label>
+                        <Textarea
+                          value={contratoData.observacoes}
+                          onChange={(e) => setContratoData({ ...contratoData, observacoes: e.target.value })}
+                          placeholder="Observações adicionais"
+                          className="input-dark mt-1"
+                          rows={2}
+                        />
+                      </div>
+                      <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                        <div className="flex justify-between mb-2">
+                          <span className="text-sm text-slate-600 dark:text-slate-400">Valor do Contrato:</span>
+                          <span className="font-bold text-lg text-blue-600 dark:text-blue-400">
+                            {formatCurrency(valorFinal)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                          <span>{diaristas.length} diarista(s)</span>
+                          <span>{custosAdicionais.length} custo(s) adicional(is)</span>
+                        </div>
+                      </div>
+                      <Button onClick={criarContrato} className="btn-primary w-full">
+                        <Save className="w-4 h-4 mr-2" />
+                        Confirmar e Criar Contrato
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </CardContent>
+            </Card>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <Card className="card">
               <CardHeader>
-                <CardTitle className="text-slate-900 dark:text-white">Contratos Registrados</CardTitle>
+                <CardTitle className="text-slate-900 dark:text-white text-base md:text-lg">Contratos Registrados</CardTitle>
               </CardHeader>
               <CardContent>
                 {contratos.length === 0 ? (
-                  <div className="text-center py-12 text-slate-500 dark:text-slate-400">
+                  <div className="text-center py-12 text-slate-500 dark:text-slate-400 text-sm">
                     Nenhum contrato registrado
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {contratos.map((contrato) => (
                       <div
                         key={contrato.id}
-                        className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600"
+                        className="p-3 md:p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600"
                       >
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <h3 className="font-bold text-lg text-slate-900 dark:text-white">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
+                          <div className="flex-1">
+                            <h3 className="font-bold text-base md:text-lg text-slate-900 dark:text-white">
                               {contrato.nome_cliente}
                             </h3>
-                            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                            <p className="text-xs md:text-sm text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">
                               {contrato.descricao || 'Sem descrição'}
                             </p>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 self-end sm:self-start">
                             {!contrato.pago && (
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={() => marcarComoPago(contrato)}
-                                className="text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                                className="text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 text-xs"
                               >
-                                <CheckCircle className="w-4 h-4 mr-1" />
-                                Marcar Pago
+                                <CheckCircle className="w-3 h-3 md:w-4 md:h-4 md:mr-1" />
+                                <span className="hidden md:inline">Pago</span>
                               </Button>
                             )}
                             <Button
@@ -848,15 +831,15 @@ export default function CalculadoraServicosPage() {
                               onClick={() => excluirContrato(contrato.id)}
                               className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
                             </Button>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div className="grid grid-cols-2 gap-3 text-xs md:text-sm">
                           <div>
                             <span className="text-slate-600 dark:text-slate-400">Valor Total</span>
-                            <p className="font-bold text-blue-600 dark:text-blue-400">
+                            <p className="font-bold text-sm md:text-base text-blue-600 dark:text-blue-400">
                               {formatCurrency(parseFloat(contrato.valor_total.toString()))}
                             </p>
                           </div>
@@ -878,7 +861,7 @@ export default function CalculadoraServicosPage() {
                           </div>
                         </div>
 
-                        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
                           <span>Forma: {contrato.forma_pagamento.toUpperCase()}</span>
                           <span>Prazo: {contrato.prazo_pagamento} dias</span>
                           <span>Margem: {contrato.margem_lucro}%</span>
