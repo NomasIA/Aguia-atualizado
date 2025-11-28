@@ -28,7 +28,6 @@ const navItems = [
   { href: '/funcionarios', label: 'Funcionários', icon: Users },
   { href: '/maquinarios', label: 'Maquinário', icon: Wrench },
   { href: '/obras', label: 'Obras', icon: Building2 },
-  { href: '/calculadora-servicos', label: 'Calculadora de Serviços', icon: DollarSign },
   { href: '/caixa', label: 'Caixa & Banco', icon: Wallet },
   { href: '/conciliacao', label: 'Conciliação', icon: FileCheck },
   { href: '/custos-fixos', label: 'Custos Fixos', icon: DollarSign },
